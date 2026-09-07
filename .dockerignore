@@ -1,0 +1,41 @@
+__pycache__/
+media/
+staticfiles/
+*pyc
+venv/
+
+# Система контроля версий
+.git/
+.gitignore
+.gitattributes
+
+# Зависимости и кэш
+node_modules/
+.npm/
+
+# Файлы окружения и секреты
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Логи и временные файлы
+*.log
+tmp/
+temp/
+
+# Каталоги сборки
+dist/
+build/
+target/
+out/
+
+# Инструменты разработки
+.vscode/
+.idea/
+*.swp
+
+# Специфичные для ОС файлы
+.DS_Store
+Thumbs.db
