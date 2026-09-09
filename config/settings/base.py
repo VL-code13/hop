@@ -54,6 +54,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Контекстный процессор сессионной корзины для счетчика в base.html
                 'orders.context_processors.cart',
             ],
         },
@@ -102,8 +103,25 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django REST Framework configuration
-REST_FRAMEWORK = {
+# Конфигурация сессий (раздел 3.3 ТЗ: корзина в сессиях)
+CART_SESSION_ID: str = 'cart'
+SESSION_COOKIE_AGE: int = 60 * 60 * 24 * 30  # 30 дней хранения сессии
+SESSION_SAVE_EVERY_REQUEST: bool = False
+
+# Маршруты авторизации пользователей (раздел 3.5 ТЗ)
+LOGIN_URL: str = 'users:login'
+LOGIN_REDIRECT_URL: str = 'products:list'
+LOGOUT_REDIRECT_URL: str = 'products:list'
+
+# Email-уведомления (раздел 3.4 ТЗ)
+EMAIL_BACKEND: str = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL: str = 'Hop & Barley <noreply@hopandbarley.com>'
+ADMINS: list[tuple[str, str]] = [
+    ('Shop Admin', 'admin@hopandbarley.com'),
+]
+
+# Конфигурация Django REST Framework (разделы 2 и 3.7 ТЗ)
+REST_FRAMEWORK: dict[str, object] = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -115,10 +133,10 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 
-# SimpleJWT configuration
-SIMPLE_JWT = {
+# Настройки JWT-аутентификации SimpleJWT
+SIMPLE_JWT: dict[str, object] = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),

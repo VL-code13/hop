@@ -1,30 +1,25 @@
-"""
-URL configuration for config project.
+"""Главная конфигурация маршрутов URL проекта Hop & Barley."""
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.conf import settings
-from django.contrib import admin
-from django.urls import path, include
 from django.conf.urls.static import static
-from config.settings.development import DEBUG
+from django.contrib import admin
+from django.urls import include, path
 
 urlpatterns = [
+    # 1. Панель администратора Django (раздел 3.6 ТЗ)
     path('admin/', admin.site.urls),
-    path('', include('products.urls')),
-    path('orders/', include('orders.urls')),
+
+    # 2. Каталог товаров и витрина (раздел 3.1 и 3.2 ТЗ)
+    # Корневой маршрут ('') ведет на products.urls
+    path('', include('products.urls', namespace='products')),
+
+    # 3. Корзина и оформление заказов (раздел 3.3 и 3.4 ТЗ)
+    path('orders/', include('orders.urls', namespace='orders')),
+
+    # 4. Пользовательские отзывы (раздел 3.2 ТЗ)
+    path('reviews/', include('reviews.urls', namespace='reviews')),
 ]
 
-if DEBUG:
+# Раздача загруженных изображений (MEDIA_ROOT) в режиме отладки
+if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
