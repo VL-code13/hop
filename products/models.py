@@ -1,47 +1,122 @@
+"""Модели базы данных для категорий и товаров каталога."""
+
+from typing import Any
 from django.db import models
 from django.urls import reverse
 
 
-# Create your models here.
-
 class Category(models.Model):
-    name = models.CharField(max_length=100)
-    slug = models.SlugField(max_length=100, unique=True)
-    parent = models.ForeignKey(
-        'self',
+    """Категория товаров с поддержкой иерархической вложенности."""
+
+    name: models.CharField = models.CharField(
+        max_length=255,
+        verbose_name="Название",
+    )
+    slug: models.SlugField = models.SlugField(
+        max_length=255,
+        unique=True,
+        verbose_name="Slug",
+    )
+    parent: models.ForeignKey = models.ForeignKey(
+        "self",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='children')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+        related_name="children",
+        verbose_name="Родительская категория",
+    )
+    created_at: models.DateTimeField = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата создания",
+    )
+    updated_at: models.DateTimeField = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Дата обновления",
+    )
 
     class Meta:
-        verbose_name_plural = 'Categories'
-        ordering = ('name',)
+        verbose_name = "Категория"
+        verbose_name_plural = "Категории"
+        ordering = ["name"]
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        """Строковое представление категории."""
+        return str(self.name)
+
+    def get_absolute_url(self) -> str:
+        """Возвращает URL списка товаров, отфильтрованных по текущей категории."""
+        return reverse("products:list_by_category", kwargs={"category_slug": self.slug})
 
 
 class Product(models.Model):
-    name = models.CharField(max_length=100)
-    slug = models.SlugField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
-    image = models.ImageField(upload_to='products/%Y/%m/%d')
-    is_active = models.BooleanField(default=True)
-    stock = models.PositiveIntegerField(default=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    """Товар интернет-магазина крафтовых напитков."""
+
+    name: models.CharField = models.CharField(
+        max_length=255,
+        verbose_name="Название",
+    )
+    slug: models.SlugField = models.SlugField(
+        max_length=255,
+        unique=True,
+        verbose_name="Slug",
+    )
+    description: models.TextField = models.TextField(
+        blank=True,
+        verbose_name="Описание",
+    )
+    price: models.DecimalField = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Цена",
+    )
+    category: models.ForeignKey = models.ForeignKey(
+        Category,
+        on_delete=models.PROTECT,
+        related_name="products",
+        verbose_name="Категория",
+    )
+    image: models.ImageField = models.ImageField(
+        upload_to="products/%Y/%m/",
+        blank=True,
+        null=True,
+        verbose_name="Изображение товара",
+    )
+    is_active: models.BooleanField = models.BooleanField(
+        default=True,
+        verbose_name="Активен",
+    )
+    stock: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Остаток на складе",
+    )
+    created_at: models.DateTimeField = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Дата добавления",
+    )
+    updated_at: models.DateTimeField = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Дата изменения",
+    )
 
     class Meta:
-        ordering = ('-created_at',)
-        indexes: list[Index] = [models.Index(fields=['slug']), ]
+        verbose_name = "Товар"
+        verbose_name_plural = "Товары"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["price"]),
+        ]
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        """Строковое представление товара."""
+        return str(self.name)
 
-    def get_absolute_url(self):
-        return reverse('products:detail', kwargs={'slug': self.slug})
+    def get_absolute_url(self) -> str:
+        """Возвращает URL детальной страницы карточки товара."""
+        return reverse("products:detail", kwargs={"slug": self.slug})
+
+    @property
+    def in_stock(self) -> bool:
+        """Проверяет фактическое наличие товара на складе."""
+        return bool(self.stock > 0)

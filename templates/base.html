@@ -1,0 +1,103 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Hop &amp; Barley{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Link to main CSS file -->
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<header>
+    <div class="header-container">
+        <a href="{% url 'products:list' %}" class="header__logo">
+            <img src="{% static 'img/logo.svg' %}" alt="Hop &amp; Barley Logo">
+            <p class="logo-text">Hop &amp; Barley</p>
+        </a>
+
+        <nav class="header__nav">
+            <ul>
+                <li><a href="{% url 'products:list' %}">Products</a></li>
+                <li><a href="#">Guides &amp; Recipes</a></li>
+                <li><a href="#">Community</a></li>
+                <li><a href="#">Resources</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+
+        <!-- Разделение состояний авторизации -->
+        {% if request.user.is_authenticated %}
+            <!-- Block for authorized user -->
+            <div class="header__user-actions" id="auth-user" style="display: flex; align-items: center; gap: 15px;">
+                <a href="{% url 'orders:cart_detail' %}" class="cart-icon" aria-label="Shopping Cart" style="position: relative;">
+                    <img src="{% static 'img/icons/Shopping_bag.svg' %}" alt="Shopping Cart">
+                    {% if request.session.cart %}
+                        <span class="cart-badge">{{ request.session.cart|length }}</span>
+                    {% endif %}
+                </a>
+
+                <a href="{% url 'users:account' %}" class="user-icon" aria-label="My Account" title="{{ request.user.username }}">
+                    <img src="{% static 'img/icons/User_alt.svg' %}" alt="User Account">
+                </a>
+
+                <!-- Кнопка безопасного выхода POST в Django 5+ -->
+                <form method="post" action="{% url 'users:logout' %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="button button--secondary" style="padding: 4px 10px; font-size: 12px; cursor: pointer;">
+                        Выйти
+                    </button>
+                </form>
+            </div>
+        {% else %}
+            <!-- Block for unauthorized user -->
+            <div class="header__auth-buttons" id="auth-guest">
+                <a href="{% url 'users:login' %}" class="button button--secondary">Sign in</a>
+                <a href="{% url 'users:register' %}" class="button button--primary">Register</a>
+            </div>
+        {% endif %}
+    </div>
+</header>
+
+<main>
+    {% if messages %}
+        <div class="container messages">
+            {% for message in messages %}
+                <div class="message message-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% block content %}
+    {% endblock %}
+</main>
+
+<!-- Footer -->
+<footer>
+    <img src="{% static 'img/background/image-footer.svg' %}" alt="Hop &amp; Barley Hops Logo" class="footer__hops-logo">
+    <nav class="footer__nav">
+        <ul>
+            <li><a href="#">Contact</a></li>
+            <li><a href="#">FAQ</a></li>
+            <li><a href="#">Community</a></li>
+            <li><a href="#">Resources</a></li>
+            <li><a href="#">License</a></li>
+        </ul>
+    </nav>
+    <p class="footer__copyright">© Hop &amp; Barley 2026. All rights reserved</p>
+</footer>
+
+<script src="{% static 'js/main.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
