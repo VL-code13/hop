@@ -1,10 +1,8 @@
 """Модели базы данных для категорий и товаров каталога."""
 
-from typing import Any
-from django.db.models import Index
 from django.db import models
 from django.urls import reverse
-
+from django.db.models import Index
 
 class Category(models.Model):
     """Категория товаров с поддержкой иерархической вложенности."""
