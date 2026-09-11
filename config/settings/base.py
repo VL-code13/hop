@@ -1,3 +1,9 @@
+"""Базовые настройки проекта Hop & Barley.
+
+Содержит общие параметры для всех окружений (development, production).
+Специфичные настройки баз данных и отладки переопределяются в соседних модулях.
+"""
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv

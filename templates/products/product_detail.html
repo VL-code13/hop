@@ -6,7 +6,7 @@
 {% block content %}
 <main class="page-product">
     <div class="container">
-        <!-- Блок основной информации о товаре -->
+        <!-- Секция основной информации о товаре -->
         <section class="product-details-section">
             <div class="product-image-container">
                 {% if product.image %}
@@ -29,20 +29,20 @@
                     <p>{{ product.description|linebreaksbr }}</p>
                 </div>
 
-                <!-- Управление добавлением в корзину -->
+                <!-- Блок добавления в корзину -->
                 <div class="cart-controls">
                     {% if product.in_stock %}
-                        <form method="post" action="{% url 'orders:cart_add' product.id %}" style="display: flex; align-items: center; gap: 15px;">
+                        <form method="post" action="{% url 'orders:cart_add' product.id %}" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
                             {% csrf_token %}
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label for="id_quantity" style="font-weight: 600; font-size: 14px;">Количество:</label>
-                                <input type="number" 
-                                       name="quantity" 
-                                       id="id_quantity" 
-                                       value="1" 
-                                       min="1" 
-                                       max="{{ product.stock }}" 
-                                       class="search-input" 
+                                <input type="number"
+                                       name="quantity"
+                                       id="id_quantity"
+                                       value="1"
+                                       min="1"
+                                       max="{{ product.stock }}"
+                                       class="search-input"
                                        style="width: 70px; padding: 8px; text-align: center;">
                             </div>
 
@@ -51,7 +51,7 @@
                                 <span>В корзину</span>
                             </button>
                         </form>
-                        <p style="margin-top: 8px; font-size: 13px; color: #28a745;">
+                        <p style="margin-top: 10px; font-size: 13px; color: #28a745;">
                             <i class="fa-solid fa-check"></i> В наличии на складе: {{ product.stock }} шт.
                         </p>
                     {% else %}
@@ -63,7 +63,7 @@
             </div>
         </section>
 
-        <!-- Аккордеон с метаданными и характеристиками -->
+        <!-- Аккордеон с техническими характеристиками -->
         <section class="accordion-section">
             <div class="accordion-item">
                 <div class="accordion-title">
@@ -73,25 +73,54 @@
                 <div class="accordion-content">
                     <ul>
                         <li><strong>Категория:</strong> {{ product.category.name }}</li>
-                        <li><strong>Артикул / Идентификатор:</strong> #{{ product.id }}</li>
+                        <li><strong>Артикул / ID:</strong> #{{ product.id }}</li>
                         <li><strong>Дата поступления:</strong> {{ product.created_at|date:"d.m.Y" }}</li>
-                        <li><strong>Статус складского наличия:</strong> {% if product.in_stock %}Доступен к заказу{% else %}Ожидает поставки{% endif %}</li>
+                        <li><strong>Складской статус:</strong> {% if product.in_stock %}В наличии ({{ product.stock }} шт.){% else %}Ожидается поставка{% endif %}</li>
                     </ul>
                 </div>
             </div>
         </section>
 
-        <!-- Блок отзывов покупателей (критерий 3.2 ТЗ) -->
+        <!-- Секция отзывов покупателей (Раздел 3.2 ТЗ) -->
         <section class="reviews-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <h2 class="reviews-title" style="margin-bottom: 0;">Отзывы покупателей</h2>
                 {% if product.avg_rating %}
                     <div style="font-size: 18px; font-weight: 600; color: #ff9f0a;">
-                        Средняя оценка: {{ product.avg_rating|floatformat:1 }} / 5.0
+                        Средний рейтинг: {{ product.avg_rating|floatformat:1 }} / 5.0
                     </div>
                 {% endif %}
             </div>
 
+            <!-- Форма отправки отзыва (проверка авторизации) -->
+            {% if request.user.is_authenticated %}
+                <div style="background: #fdfdfd; border: 1px solid #e2e2e2; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px;">Оставить отзыв о товаре</h3>
+                    <form method="post" action="{% url 'reviews:add_review' product.id %}">
+                        {% csrf_token %}
+                        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                            <label for="id_rating" style="font-weight: 600;">Оценка:</label>
+                            <select name="rating" id="id_rating" class="search-input" style="width: 130px; padding: 6px 10px;">
+                                <option value="5">5 звезд</option>
+                                <option value="4">4 звезды</option>
+                                <option value="3">3 звезды</option>
+                                <option value="2">2 звезды</option>
+                                <option value="1">1 звезда</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <textarea name="comment" rows="3" class="search-input" style="width: 100%; border-radius: 6px; padding: 10px;" placeholder="Поделитесь впечатлениями о вкусе, аромате или свойствах (доступно только после покупки)..." required></textarea>
+                        </div>
+                        <button type="submit" class="button button--primary" style="padding: 8px 18px;">Опубликовать отзыв</button>
+                    </form>
+                </div>
+            {% else %}
+                <div style="padding: 12px 16px; background-color: #f9f9f9; border-radius: 6px; margin-bottom: 24px; font-size: 14px; color: #666;">
+                    Чтобы оставить отзыв, пожалуйста, <a href="{% url 'users:login' %}" style="color: #d48b28; font-weight: 600;">войдите в аккаунт</a>.
+                </div>
+            {% endif %}
+
+            <!-- Список ранее опубликованных отзывов -->
             <div class="reviews-grid">
                 {% for review in reviews %}
                     <div class="review-card">

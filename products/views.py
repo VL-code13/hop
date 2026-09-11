@@ -4,7 +4,7 @@ from typing import Any, Optional
 from django.db.models import QuerySet, Q, Avg
 from django.views.generic import ListView, DetailView
 
-from products.form import AddToCartProductForm
+from products.forms import AddToCartProductForm
 from products.models import Product, Category
 
 
@@ -17,7 +17,7 @@ class ProductListView(ListView):
     и описание, многоуровневую фильтрацию по категории/цене, а также сортировку.
     """
     model = Product
-    template_name: str = 'home.html'
+    template_name: str = 'products/product_list.html'
     context_object_name: str = 'products'
     paginate_by = 9
 

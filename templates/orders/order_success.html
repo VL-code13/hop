@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Заказ успешно оформлен | Hop &amp; Barley{% endblock %}
+
+{% block content %}
+<main class="container" style="padding: 60px 20px; text-align: center;">
+    <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 12px; border: 1px solid #eaeaea;">
+        <i class="fa-solid fa-circle-check" style="font-size: 64px; color: #34c759; margin-bottom: 20px;"></i>
+        <h1 style="font-size: 26px; margin-bottom: 12px;">Спасибо за заказ!</h1>
+        <p style="font-size: 16px; color: #555; margin-bottom: 20px;">
+            Номер вашего заказа: <strong>#{{ order.id }}</strong>. Сумма к оплате: <strong>{{ order.total_price }} ₽</strong>.
+        </p>
+        <p style="font-size: 14px; color: #777; margin-bottom: 30px;">
+            Детали отправлены на вашу электронную почту. Вы можете отслеживать статус заказа в личном кабинете.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 15px;">
+            <a href="{% url 'products:list' %}" class="button button--secondary">В каталог</a>
+            <a href="{% url 'orders:order_history' %}" class="button button--primary">Мои заказы</a>
+        </div>
+    </div>
+</main>
+{% endblock %}

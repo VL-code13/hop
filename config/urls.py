@@ -18,6 +18,10 @@ urlpatterns = [
 
     # 4. Пользовательские отзывы (раздел 3.2 ТЗ)
     path('reviews/', include('reviews.urls', namespace='reviews')),
+
+    # 5. Регистрация пространства имен users
+
+    path('users/', include('users.urls', namespace='users')),
 ]
 
 # Раздача загруженных изображений (MEDIA_ROOT) в режиме отладки

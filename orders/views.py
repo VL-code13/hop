@@ -16,7 +16,7 @@ from .models import Order, OrderItem
 
 def cart_detail(request: HttpRequest) -> HttpResponse:
     """Отображает страницу содержимого корзины покупателя."""
-    return render(request, 'cart.html', {'cart': Cart(request)})
+    return render(request, 'orders/cart_detail.html', {'cart': Cart(request)})
 
 
 @require_POST
@@ -97,7 +97,7 @@ def order_create(request: HttpRequest) -> HttpResponse:
     """
     Создает заказ, списывает остатки и отправляет уведомления по email.
 
-    Использует атомарную транзакцию для исключения гонок при списании товара.
+    Использует атомарную транзакцию для исключения race conditions.
     """
     cart = Cart(request)
     if len(cart) == 0:
@@ -105,58 +105,71 @@ def order_create(request: HttpRequest) -> HttpResponse:
         return redirect('products:list')
 
     if request.method == 'POST':
-        form = OrderCreateForm(request.POST)
-        if form.is_valid():
-            with transaction.atomic():
-                # Проверка наличия товаров на складе
-                for item in cart:
-                    prod: Product = item['product']
-                    if prod.stock < item['quantity']:
-                        messages.error(
-                            request,
-                            f"Недостаточно остатка для '{prod.name}' (в наличии: {prod.stock})."
-                        )
-                        return redirect('orders:cart_detail')
+        full_name = request.POST.get('full_name', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        city = request.POST.get('city', '').strip()
+        address_raw = request.POST.get('shipping_address', '').strip()
+        payment_method = request.POST.get('payment_method', Order.PaymentMethod.CARD)
 
-                order = form.save(commit=False)
-                order.user = request.user
-                order.total_price = cart.get_total_price()
-                order.save()
+        # Сборка полного адреса с контактами
+        combined_address = (
+            f"Получатель: {full_name}\n"
+            f"Тел: {phone}\n"
+            f"Город: {city}\n"
+            f"Адрес: {address_raw}"
+        )
 
-                for item in cart:
-                    prod = item['product']
-                    OrderItem.objects.create(
-                        order=order,
-                        product=prod,
-                        price=item['price'],
-                        quantity=item['quantity'],
+        with transaction.atomic():
+            # Проверка наличия достаточного количества товаров на складе
+            for item in cart:
+                prod: Product = item['product']
+                if prod.stock < item['quantity']:
+                    messages.error(
+                        request,
+                        f"Недостаточно остатка для '{prod.name}' (в наличии: {prod.stock})."
                     )
-                    # Списание складского остатка
-                    prod.stock -= item['quantity']
-                    prod.save(update_fields=['stock'])
+                    return redirect('orders:cart_detail')
 
-            cart.clear()
-
-            # Email-уведомления (раздел 3.4 ТЗ)
-            if request.user.email:
-                send_mail(
-                    subject=f"Заказ #{order.id} оформлен",
-                    message=f"Здравствуйте, {request.user.username}! Ваш заказ на сумму {order.total_price} ₽ принят.",
-                    from_email=None,
-                    recipient_list=[request.user.email],
-                    fail_silently=True,
-                )
-            mail_admins(
-                subject=f"Новый заказ #{order.id}",
-                message=f"Пользователь {request.user.username} оформил заказ #{order.id} на сумму {order.total_price} ₽.",
-                fail_silently=True,
+            order = Order.objects.create(
+                user=request.user,
+                payment_method=payment_method,
+                shipping_address=combined_address,
+                total_price=cart.get_total_price(),
+                status=Order.Status.PENDING,
             )
 
-            return render(request, 'orders/order_success.html', {'order': order})
-    else:
-        form = OrderCreateForm()
+            for item in cart:
+                prod = item['product']
+                OrderItem.objects.create(
+                    order=order,
+                    product=prod,
+                    price=item['price'],
+                    quantity=item['quantity'],
+                )
+                # Списание складского остатка
+                prod.stock -= item['quantity']
+                prod.save(update_fields=['stock'])
 
-    return render(request, 'orders/checkout.html', {'cart': cart, 'form': form})
+        cart.clear()
+
+        # Email-уведомления (раздел 3.4 ТЗ)
+        if request.user.email:
+            send_mail(
+                subject=f"Заказ #{order.id} оформлен",
+                message=f"Здравствуйте, {request.user.username}! Ваш заказ на сумму {order.total_price} ₽ принят.",
+                from_email=None,
+                recipient_list=[request.user.email],
+                fail_silently=True,
+            )
+        mail_admins(
+            subject=f"Новый заказ #{order.id}",
+            message=f"Пользователь {request.user.username} оформил заказ #{order.id} на сумму {order.total_price} ₽.",
+            fail_silently=True,
+        )
+
+        return render(request, 'orders/order_success.html', {'order': order})
+
+    return render(request, 'orders/checkout.html', {'cart': cart})
 
 
 @login_required
