@@ -1,31 +1,47 @@
-"""
-Маршруты URL для аутентификации и профиля пользователя.
-Регистрирует пространство имен 'users' для роутинга по разделам 3.5 и 5 ТЗ.
-"""
+"""Маршруты аутентификации, регистрации и профиля пользователей."""
 
 from django.contrib.auth import views as auth_views
-from django.urls import path
+from django.urls import path, reverse_lazy
 from . import views
+from .forms import CustomPasswordResetForm
 
-app_name: str = 'users'
+app_name = 'users'
 
 urlpatterns = [
-    # Аутентификация и регистрация (раздел 3.5 ТЗ)
     path('login/', views.CustomLoginView.as_view(), name='login'),
-    path('register/', views.UserRegisterView.as_view(), name='register'),
     path('logout/', views.CustomLogoutView.as_view(), name='logout'),
+    path('register/', views.RegisterView.as_view(), name='register'),
+    path('account/', views.AccountView.as_view(), name='account'),
+    path('account/delete/', views.DeleteAccountView.as_view(), name='delete_account'),
 
-    # Личный кабинет и деактивация (раздел 3.5 ТЗ)
-    path('account/', views.account_view, name='account'),
-    path('account/delete/', views.delete_account_view, name='delete_account'),
-
-    # Восстановление доступа по шаблону forgot_password.html
+    # Восстановление пароля и реактивация профиля
     path(
         'password-reset/',
         auth_views.PasswordResetView.as_view(
-            template_name='forgot_password.html',
-            success_url='/users/login/',
+            template_name='password_reset_form.html',
+            email_template_name='password_reset_email.html',
+            form_class=CustomPasswordResetForm,
+            success_url=reverse_lazy('users:password_reset_done'),
         ),
         name='password_reset',
+    ),
+    path(
+        'password-reset/done/',
+        auth_views.PasswordResetDoneView.as_view(
+            template_name='password_reset_done.html',
+        ),
+        name='password_reset_done',
+    ),
+    path(
+        'password-reset-confirm/<uidb64>/<token>/',
+        views.ReactivatePasswordResetConfirmView.as_view(),
+        name='password_reset_confirm',
+    ),
+    path(
+        'password-reset/complete/',
+        auth_views.PasswordResetCompleteView.as_view(
+            template_name='password_reset_complete.html',
+        ),
+        name='password_reset_complete',
     ),
 ]

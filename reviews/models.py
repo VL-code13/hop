@@ -1,5 +1,6 @@
-"""Модели базы данных для системы пользовательских отзывов и рейтингов."""
-
+"""Модели базы данных для системы пользовательских отзывов и рейтингов.
+Реализует требования разделов 3.2 («Отзывы с рейтингами 1–5») и 4 («Структура данных») ТЗ.
+"""
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models

@@ -2,7 +2,7 @@
 
 from django.db import models
 from django.urls import reverse
-from django.db.models import Index
+
 
 class Category(models.Model):
     """Категория товаров с поддержкой иерархической вложенности."""
@@ -48,7 +48,12 @@ class Category(models.Model):
 
 
 class Product(models.Model):
-    """Товар интернет-магазина крафтовых напитков."""
+    """
+    Товар интернет-магазина крафтового пивоварения Hop & Barley.
+
+    Хранит информацию о стоимости, остатках на складе, изображениях
+    и статусе активности (раздел 4 ТЗ).
+    """
 
     name: models.CharField = models.CharField(
         max_length=255,
@@ -67,12 +72,14 @@ class Product(models.Model):
         max_digits=10,
         decimal_places=2,
         verbose_name="Цена",
+        help_text='Текущая розничная цена за единицу товара.',
     )
     category: models.ForeignKey = models.ForeignKey(
         Category,
         on_delete=models.PROTECT,
         related_name="products",
         verbose_name="Категория",
+        help_text='Категория, к которой привязан товар.',
     )
     image: models.ImageField = models.ImageField(
         upload_to="products/%Y/%m/",
@@ -83,10 +90,12 @@ class Product(models.Model):
     is_active: models.BooleanField = models.BooleanField(
         default=True,
         verbose_name="Активен",
+        help_text='Отображать ли товар на витрине магазина.',
     )
     stock: models.PositiveIntegerField = models.PositiveIntegerField(
         default=0,
         verbose_name="Остаток на складе",
+        help_text='Количество доступных для заказа единиц.',
     )
     created_at: models.DateTimeField = models.DateTimeField(
         auto_now_add=True,
@@ -101,6 +110,7 @@ class Product(models.Model):
         verbose_name = "Товар"
         verbose_name_plural = "Товары"
         ordering = ["-created_at"]
+        # Индексация для ускорения выборок и сортировок (раздел 3.1 ТЗ)
         indexes = [
             models.Index(fields=["slug"]),
             models.Index(fields=["-created_at"]),
@@ -113,9 +123,10 @@ class Product(models.Model):
 
     def get_absolute_url(self) -> str:
         """Возвращает URL детальной страницы карточки товара."""
-        return reverse("products:detail", kwargs={"slug": self.slug})
+        return reverse("products:product_detail", kwargs={"slug": self.slug})
 
     @property
     def in_stock(self) -> bool:
-        """Проверяет фактическое наличие товара на складе."""
+        """Проверяет фактическое наличие товара на складе.
+        Возвращает True, если физический остаток на складе строго больше 0."""
         return bool(self.stock > 0)

@@ -15,7 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Надежная загрузка .env из корня проекта
 load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY' )
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -24,11 +24,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Сторонние библиотеки
+    # Сторонние библиотеки (разделы 2, 3.7, 3.8 ТЗ)
     'rest_framework',
-    'rest_framework_simplejwt', # JWT аутентификация по ТЗ
-    
+    'rest_framework_simplejwt',  # JWT аутентификация по ТЗ
+    'drf_spectacular',
     # Приложения проекта
     'products',
     'orders',
@@ -36,6 +35,25 @@ INSTALLED_APPS = [
     'reviews',
     'payments',
 ]
+# Настройка генератора схемы REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 9,
+}
+
+# Метаданные OpenAPI документации (раздел 3.8 ТЗ)
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Hop & Barley API',
+    'DESCRIPTION': 'REST API интернет-магазина товаров для крафтового пивоварения Hop & Barley.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -99,14 +117,6 @@ STORAGES = {
     },
 }
 
-# Email Backend (консоль для dev / логов)
-#EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-#MAILERS = {
-#    'default': {
-#        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-#    },
-#}
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Конфигурация сессий (раздел 3.3 ТЗ: корзина в сессиях)
@@ -116,24 +126,24 @@ SESSION_SAVE_EVERY_REQUEST: bool = False
 
 # Маршруты авторизации пользователей (раздел 3.5 ТЗ)
 LOGIN_URL: str = 'users:login'
-LOGIN_REDIRECT_URL: str = 'products:list'
-LOGOUT_REDIRECT_URL: str = 'products:list'
+LOGIN_REDIRECT_URL: str = 'products:product_list'
+LOGOUT_REDIRECT_URL: str = 'products:product_list'
 
-# Email-уведомления (раздел 3.4 ТЗ)
+# Email-уведомления и почтовые службы (раздел 3.4 ТЗ)
 EMAIL_BACKEND: str = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL: str = 'Hop & Barley <noreply@hopandbarley.com>'
-ADMINS: list[tuple[str, str]] = [
-    ('Shop Admin', 'admin@hopandbarley.com'),
+
+# Новый формат Django 6+: простой список email-адресов строк
+ADMINS: list[str] = [
+    'admin@hopandbarley.com',
 ]
 
 # Конфигурация Django REST Framework (разделы 2 и 3.7 ТЗ)
-REST_FRAMEWORK: dict[str, object] = {
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
@@ -142,8 +152,12 @@ REST_FRAMEWORK: dict[str, object] = {
 # Настройки JWT-аутентификации SimpleJWT
 SIMPLE_JWT: dict[str, object] = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+AUTHENTICATION_BACKENDS = [
+    'users.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]

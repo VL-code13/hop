@@ -20,4 +20,5 @@ class UsersConfig(AppConfig):
         Инициализация приложения при запуске сервера.
         Загружает сигналы создания профилей (по разделу 3.5 ТЗ).
         """
-        import users.signals  # noqa: F401 «Module imported but unused» («Модуль импортирован, но не используется в коде»
+        import users.signals  # noqa: F401 «Module imported but unused» («Модуль импортирован,
+        # но не используется в коде»

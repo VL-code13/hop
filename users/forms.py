@@ -1,198 +1,205 @@
 """
-Формы пользовательского интерфейса для личного кабинета и аутентификации.
-Реализует требования раздела 3.5 ТЗ («регистрация, вход/выход, редактирование профиля, смена пароля»).
+Формы аутентификации, регистрации и редактирования профиля пользователей.
+
+Реализует требования разделов 3.5 и 3.7 ТЗ интернет-магазина Hop & Barley.
 """
 
+from __future__ import annotations
+
+import re
 from typing import Any
 from django import forms
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.forms import (
     AuthenticationForm,
     PasswordChangeForm,
-    UserCreationForm,
+    PasswordResetForm,
 )
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+
 from .models import Profile
 
 User = get_user_model()
 
+phone_validator = RegexValidator(
+    regex=r'^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
+    message="Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567)."
+)
 
-class UserRegistrationForm(UserCreationForm):
+
+class UserLoginForm(AuthenticationForm):
+    """Форма авторизации с поддержкой входа по Email или Username."""
+
+    username = forms.CharField(
+        label='Email или имя пользователя',
+        widget=forms.TextInput(attrs={
+            'class': 'Input',
+            'placeholder': 'brewer@hopbarley.ru',
+            'id': 'id_username',
+            'autofocus': True,
+        })
+    )
+    password = forms.CharField(
+        label='Пароль',
+        widget=forms.PasswordInput(attrs={
+            'class': 'Input',
+            'placeholder': '••••••••',
+            'id': 'id_password',
+        })
+    )
+
+
+class UserRegisterForm(forms.ModelForm):
     """
-    Форма самостоятельной регистрации покупателя (раздел 3.5 ТЗ).
-
-    Использует email в качестве основного идентификатора.
-    Реализует реактивацию учетной записи при повторной регистрации,
-    чтобы сохранить историю заказов без каскадного удаления (раздел 3.5 и 4 ТЗ).
+    Форма регистрации нового пользователя.
+    При обнаружении деактивированного аккаунта предлагает сброс пароля для реактивации.
     """
 
     email = forms.EmailField(
-        required=True,
+        label='Email',
         widget=forms.EmailInput(attrs={
             'class': 'Input',
-            'placeholder': 'name@domain.com',
-            'autocomplete': 'email',
-            'id': 'email',
-        }),
-        label='Электронная почта',
-        help_text='На этот адрес приходят подтверждения заказов по разделу 3.4 ТЗ.',
+            'placeholder': 'brewer@hopbarley.ru',
+            'required': True,
+        })
+    )
+    password1 = forms.CharField(
+        label='Пароль',
+        widget=forms.PasswordInput(attrs={
+            'class': 'Input',
+            'placeholder': '••••••••',
+            'required': True,
+        })
+    )
+    password2 = forms.CharField(
+        label='Подтверждение пароля',
+        widget=forms.PasswordInput(attrs={
+            'class': 'Input',
+            'placeholder': '••••••••',
+            'required': True,
+        })
     )
 
-    class Meta(UserCreationForm.Meta):
+    class Meta:
         model = User
         fields = ('email',)
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Применяет стили CSS-класса Input ко всем полям формы."""
-        super().__init__(*args, **kwargs)
-        for field_name in self.fields:
-            self.fields[field_name].widget.attrs.update({'class': 'Input'})
-
     def clean_email(self) -> str:
-        """
-        Валидация уникальности почты:
-        - Если email занят активным аккаунтом -> ошибка валидации.
-        - Если аккаунт был деактивирован (is_active=False) -> разрешается реактивация.
-        """
-        email: str = self.cleaned_data.get('email', '').strip().lower()
-        active_user_exists = User.objects.filter(email__iexact=email, is_active=True).exists()
+        email = self.cleaned_data.get('email', '').strip().lower()
+        existing_user = User.objects.filter(email=email).first()
 
-        if active_user_exists:
-            raise forms.ValidationError('Пользователь с таким адресом email уже зарегистрирован.')
+        if existing_user:
+            if existing_user.is_active:
+                raise ValidationError('Пользователь с таким email уже зарегистрирован.')
+
+            reset_url = reverse('users:password_reset')
+            message = mark_safe(
+                f'Аккаунт с email <b>{email}</b> был ранее деактивирован. '
+                f'Для восстановления доступа и сохранения истории заказов, пожалуйста, '
+                f'<a href="{reset_url}?email={email}" style="color: #e8a84c; text-decoration: underline; font-weight: 600;">'
+                f'восстановите пароль</a>.'
+            )
+            raise ValidationError(message)
+
         return email
 
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        p1 = cleaned_data.get('password1')
+        p2 = cleaned_data.get('password2')
+
+        if p1 and p2 and p1 != p2:
+            self.add_error('password2', 'Введенные пароли не совпадают.')
+
+        return cleaned_data
+
     def save(self, commit: bool = True) -> Any:
-        """
-        Сохранение формы регистрации:
-        - Если аккаунт ранее деактивирован через Soft Delete, он восстанавливается,
-          сохраняя связь с заказами Order по разделу 3.5 и 4 ТЗ.
-        - Иначе создается новый пользователь, где username равен email.
-        """
-        email: str = self.cleaned_data.get('email', '').strip().lower()
-        inactive_user = User.objects.filter(email__iexact=email, is_active=False).first()
-
-        if inactive_user:
-            inactive_user.username = email
-            inactive_user.set_password(self.cleaned_data['password1'])
-            inactive_user.is_active = True
-            if commit:
-                inactive_user.save()
-            return inactive_user
-
         user = super().save(commit=False)
+        email = self.cleaned_data['email']
         user.email = email
-        user.username = email
+
+        base_username = email.split('@')[0]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f'{base_username}{counter}'
+            counter += 1
+        user.username = username
+
+        user.set_password(self.cleaned_data['password1'])
         if commit:
             user.save()
         return user
 
 
-class UserLoginForm(AuthenticationForm):
-    """
-    Форма авторизации покупателя (раздел 3.5 ТЗ: «вход (session auth)»).
-    Использует email в качестве логина.
-    """
+class CustomPasswordResetForm(PasswordResetForm):
+    """Форма сброса пароля, разрешающая отправку токена для деактивированных аккаунтов."""
 
-    username = forms.CharField(
-        widget=forms.EmailInput(attrs={
-            'class': 'Input',
-            'placeholder': 'name@domain.com',
-            'autocomplete': 'email',
-            'id': 'email',
-        }),
-        label='Электронная почта',
-    )
-    password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'Input',
-            'placeholder': '••••••••',
-            'autocomplete': 'current-password',
-            'id': 'password',
-        }),
-        label='Пароль',
-    )
+    def get_users(self, email: str) -> Any:
+        email_field_name = User.get_email_field_name()
+        return User._default_manager.filter(
+            **{f'{email_field_name}__iexact': email}
+        )
 
 
-class UserUpdateForm(forms.ModelForm):
-    """
-    Форма редактирования профиля (раздел 3.5 ТЗ: «редактирование профиля»).
-    Изменяет имя, фамилию и контактный email.
-    """
+class ProfileUpdateForm(forms.ModelForm):
+    """Форма редактирования личных и контактных данных в личном кабинете."""
 
-    first_name = forms.CharField(
-        max_length=30,
+    phone = forms.CharField(
+        label='Номер телефона',
         required=False,
-        widget=forms.TextInput(attrs={'class': 'Input', 'id': 'acc-full-name'}),
-        label='Имя',
+        validators=[phone_validator],
+        widget=forms.TextInput(attrs={
+            'class': 'Input',
+            'placeholder': '+7 (999) 000-00-00',
+            'id': 'id_phone',
+        })
     )
-    last_name = forms.CharField(
-        max_length=30,
+    default_shipping_address = forms.CharField(
+        label='Адрес доставки по умолчанию',
         required=False,
-        widget=forms.TextInput(attrs={'class': 'Input'}),
-        label='Фамилия',
-    )
-    email = forms.EmailField(
-        required=True,
-        widget=forms.EmailInput(attrs={'class': 'Input', 'id': 'acc-email'}),
-        label='Электронная почта',
+        widget=forms.Textarea(attrs={
+            'class': 'Textarea',
+            'placeholder': 'Город, улица, дом, квартира / офис',
+            'rows': 3,
+            'id': 'id_shipping_address',
+        })
     )
 
     class Meta:
         model = User
         fields = ('first_name', 'last_name', 'email')
+        widgets = {
+            'first_name': forms.TextInput(attrs={'class': 'Input', 'placeholder': 'Иван'}),
+            'last_name': forms.TextInput(attrs={'class': 'Input', 'placeholder': 'Иванов'}),
+            'email': forms.EmailInput(attrs={'class': 'Input', 'placeholder': 'brewer@hopbarley.ru'}),
+        }
 
-    def clean_email(self) -> str:
-        """Проверяет уникальность email среди других пользователей."""
-        email: str = self.cleaned_data.get('email', '').strip().lower()
-        duplicate = (
-            User.objects.filter(email__iexact=email, is_active=True)
-            .exclude(pk=self.instance.pk)
-            .exists()
-        )
-        if duplicate:
-            raise forms.ValidationError('Этот адрес электронной почты уже используется другим аккаунтом.')
-        return email
+    def clean_phone(self) -> str:
+        phone = self.cleaned_data.get('phone', '').strip()
+        if phone:
+            digits_only = re.sub(r'\D', '', phone)
+            if len(digits_only) not in (10, 11):
+                raise ValidationError('Номер телефона должен содержать 10 или 11 цифр.')
+        return phone
 
-
-class ProfileUpdateForm(forms.ModelForm):
-    """
-    Форма редактирования адреса доставки и телефона (раздел 3.5 ТЗ).
-    Данные сохраняются для повторных заказов в /checkout/ (раздел 3.4 ТЗ).
-    """
-
-    phone = forms.CharField(
-        max_length=20,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'Input',
-            'placeholder': '+7 (999) 000-00-00',
-            'id': 'acc-phone',
-        }),
-        label='Номер телефона',
-    )
-    default_shipping_address = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={
-            'class': 'Textarea',
-            'rows': 3,
-            'placeholder': 'Укажите город, улицу, дом и квартиру',
-            'id': 'acc-address',
-        }),
-        label='Основной адрес доставки',
-    )
-
-    class Meta:
-        model = Profile
-        fields = ('phone', 'default_shipping_address')
+    def save(self, commit: bool = True) -> Any:
+        user = super().save(commit=commit)
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.phone = self.cleaned_data.get('phone', '')
+        profile.default_shipping_address = self.cleaned_data.get('default_shipping_address', '')
+        if commit:
+            profile.save()
+        return user
 
 
-class StyledPasswordChangeForm(PasswordChangeForm):
-    """
-    Форма смены пароля в личном кабинете (раздел 3.5 ТЗ: «смена пароля»).
-    Стилизована под класс Input.
-    """
+class PasswordChangeCustomForm(PasswordChangeForm):
+    """Кастомная форма смены пароля с классами оформления."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Накладывает стили оформления Input на поля формы смены пароля."""
         super().__init__(*args, **kwargs)
-        for field_name in self.fields:
-            self.fields[field_name].widget.attrs.update({'class': 'Input'})
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': 'Input'})

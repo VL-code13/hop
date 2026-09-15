@@ -1,16 +1,21 @@
-"""Настройки отображения моделей каталога в административной панели Django."""
+"""
+Настройки отображения моделей каталога в административной панели Django.
+
+Реализует требования раздела 3.6 ТЗ («Админ-панель: управление товарами,
+категориями, аннотации, фильтры, кастомные actions»).
+"""
 
 from typing import Sequence
 from django.contrib import admin
 from django.db.models import Count, QuerySet
 from django.http import HttpRequest
 
-from products.models import Category, Product
+from .models import Category, Product
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    """Конфигурация админ-зоны для управления товарными категориями."""
+    """Конфигурация админ-зоны для товарных категорий (раздел 3.6 ТЗ)."""
 
     list_display: Sequence[str] = (
         'name',
@@ -25,11 +30,14 @@ class CategoryAdmin(admin.ModelAdmin):
     ordering: Sequence[str] = ('name',)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Category]:
-        """Аннотация количества привязанных товаров для оптимизации и аналитики."""
+        """
+        Аннотация количества привязанных товаров для аналитики (раздел 3.6 ТЗ).
+        Исключает N+1 запросов при отображении списка категорий.
+        """
         queryset = super().get_queryset(request)
         return queryset.annotate(total_products=Count('products'))
 
-    @admin.display(description="Кол-во товаров", ordering='total_products')
+    @admin.display(description='Кол-во товаров', ordering='total_products')
     def products_count(self, obj: Category) -> int:
         """Отображает вычисленное количество товаров в категории."""
         return getattr(obj, 'total_products', 0)
@@ -37,7 +45,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    """Конфигурация админ-зоны для управления товарами."""
+    """Конфигурация админ-зоны для управления товарами (раздел 3.6 ТЗ)."""
 
     list_display: Sequence[str] = (
         'name',
@@ -53,12 +61,14 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable: Sequence[str] = ('stock', 'price', 'is_active')
     actions: list[str] = ['make_active', 'make_inactive']
 
-    @admin.action(description="Сделать выбранные товары активными")
+    @admin.action(description='Сделать выбранные товары активными')
     def make_active(self, request: HttpRequest, queryset: QuerySet[Product]) -> None:
-        """Массовый action для перевода товаров в статус активных."""
-        queryset.update(is_active=True)
+        """Массовый action для перевода товаров в статус активных на витрине."""
+        updated_count = queryset.update(is_active=True)
+        self.message_user(request, f'Активировано товаров: {updated_count}.')
 
-    @admin.action(description="Снять выбранные товары с витрины")
+    @admin.action(description='Снять выбранные товары с витрины')
     def make_inactive(self, request: HttpRequest, queryset: QuerySet[Product]) -> None:
         """Массовый action для деактивации товаров."""
-        queryset.update(is_active=False)
+        updated_count = queryset.update(is_active=False)
+        self.message_user(request, f'Снято с витрины товаров: {updated_count}.')

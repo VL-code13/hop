@@ -1,4 +1,5 @@
-"""Формы ввода и валидации пользовательских отзывов."""
+"""Формы ввода и валидации пользовательских отзывов.
+Реализует требования раздела 3.2 ТЗ."""
 
 from django import forms
 from .models import Review
@@ -17,7 +18,7 @@ class ReviewForm(forms.ModelForm):
             ),
             'comment': forms.Textarea(
                 attrs={
-                    'class': 'form-input',
+                    'class': 'Textarea',
                     'rows': 4,
                     'placeholder': 'Поделитесь впечатлениями о вкусе, аромате или качестве...',
                     'required': True,

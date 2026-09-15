@@ -1,55 +1,60 @@
-"""Сериализаторы DRF для эндпоинтов каталога товаров и категорий."""
+"""
+Сериализаторы Django REST Framework для каталога товаров и категорий.
+
+Реализует требования раздела 3.7 ТЗ (/api/products/ и /api/products/<id>/).
+"""
 
 from typing import Sequence
 from rest_framework import serializers
-
 from .models import Category, Product
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    """Сериализатор категорий с метаданными."""
+    """Сериализатор категорий с выводом вложенности."""
 
     class Meta:
         model = Category
-        fields: Sequence[str] = ("id", "name", "slug", "parent")
+        fields: Sequence[str] = ('id', 'name', 'slug', 'parent')
 
 
 class ProductListSerializer(serializers.ModelSerializer):
-    """Сериализатор товаров для спискового вывода в REST API."""
+    """Краткая информация о товаре для списка /api/products/."""
 
-    category: serializers.StringRelatedField = serializers.StringRelatedField()
+    category = serializers.CharField(source='category.name', read_only=True)
+    avg_rating = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Product
         fields: Sequence[str] = (
-            "id",
-            "name",
-            "slug",
-            "price",
-            "category",
-            "image",
-            "stock",
-            "is_active",
+            'id',
+            'slug',
+            'name',
+            'price',
+            'image',
+            'category',
+            'avg_rating',
         )
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
-    """Сериализатор полной информации о товаре для детального API."""
+    """Полная информация о товаре для эндпоинта /api/products/<id>/."""
 
-    category: CategorySerializer = CategorySerializer(read_only=True)
+    category = CategorySerializer(read_only=True)
+    avg_rating = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Product
         fields: Sequence[str] = (
-            "id",
-            "name",
-            "slug",
-            "description",
-            "price",
-            "category",
-            "image",
-            "stock",
-            "is_active",
-            "created_at",
-            "updated_at",
+            'id',
+            'slug',
+            'name',
+            'description',
+            'price',
+            'image',
+            'stock',
+            'is_active',
+            'category',
+            'avg_rating',
+            'created_at',
+            'updated_at',
         )

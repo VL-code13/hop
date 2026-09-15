@@ -1,0 +1,79 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div id="content-main" style="margin-bottom: 30px;">
+    <!-- Сетка аналитических карточек (Метрики раздела 3.6 ТЗ) -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">
+        <div style="background: #2a221b; border: 1px solid #3d3228; border-radius: 8px; padding: 18px; color: #f5f0eb;">
+            <div style="font-size: 12px; text-transform: uppercase; color: #a89f91; letter-spacing: 0.5px;">Общая выручка</div>
+            <div style="font-size: 26px; font-weight: bold; color: #e8a84c; margin-top: 8px;">{{ total_sales }} ₽</div>
+            <div style="font-size: 11px; color: #7d7265; margin-top: 4px;">Оплаченные заказы</div>
+        </div>
+
+        <div style="background: #2a221b; border: 1px solid #3d3228; border-radius: 8px; padding: 18px; color: #f5f0eb;">
+            <div style="font-size: 12px; text-transform: uppercase; color: #a89f91; letter-spacing: 0.5px;">Всего заказов</div>
+            <div style="font-size: 26px; font-weight: bold; color: #f5f0eb; margin-top: 8px;">{{ total_orders_count }}</div>
+            <div style="font-size: 11px; color: #e8a84c; margin-top: 4px;">Ожидают: {{ pending_orders_count }}</div>
+        </div>
+
+        <div style="background: #2a221b; border: 1px solid #3d3228; border-radius: 8px; padding: 18px; color: #f5f0eb;">
+            <div style="font-size: 12px; text-transform: uppercase; color: #a89f91; letter-spacing: 0.5px;">Покупатели</div>
+            <div style="font-size: 26px; font-weight: bold; color: #f5f0eb; margin-top: 8px;">{{ total_users_count }}</div>
+            <div style="font-size: 11px; color: #7d7265; margin-top: 4px;">Активные профили</div>
+        </div>
+
+        <div style="background: #2a221b; border: 1px solid #3d3228; border-radius: 8px; padding: 18px; color: #f5f0eb;">
+            <div style="font-size: 12px; text-transform: uppercase; color: #a89f91; letter-spacing: 0.5px;">Активных товаров</div>
+            <div style="font-size: 26px; font-weight: bold; color: #f5f0eb; margin-top: 8px;">{{ total_products_count }}</div>
+            <div style="font-size: 11px; color: #c45b5b; margin-top: 4px;">Заканчиваются: {{ low_stock_products|length }}</div>
+        </div>
+    </div>
+
+    <!-- Блок предупреждений о складских остатках -->
+    {% if low_stock_products %}
+    <div style="background: #331e1e; border: 1px solid #6b2e2e; border-radius: 8px; padding: 15px; margin-bottom: 25px; color: #ffcccc;">
+        <strong style="color: #ff8888;">Внимание! Заканчиваются остатки на складе:</strong>
+        <ul style="margin: 8px 0 0 20px; padding: 0;">
+            {% for p in low_stock_products %}
+                <li><strong>{{ p.name }}</strong> — осталось всего {{ p.stock }} шт. (категория: {{ p.category.name }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Таблица последних 5 заказов -->
+    <div style="background: #211a14; border: 1px solid #3d3228; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <h3 style="margin-top: 0; color: #e8a84c;">Последние заказы магазина</h3>
+        <table style="width: 100%; border-collapse: collapse; color: #f5f0eb; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid #3d3228; text-align: left;">
+                    <th style="padding: 8px;">№ Заказа</th>
+                    <th style="padding: 8px;">Покупатель</th>
+                    <th style="padding: 8px;">Сумма</th>
+                    <th style="padding: 8px;">Статус</th>
+                    <th style="padding: 8px;">Дата</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in recent_orders %}
+                <tr style="border-bottom: 1px solid #2e241c;">
+                    <td style="padding: 8px;"><a href="{% url 'admin:orders_order_change' order.id %}" style="color: #e8a84c; font-weight: bold;">#{{ order.id }}</a></td>
+                    <td style="padding: 8px;">{{ order.user.username }}</td>
+                    <td style="padding: 8px;">{{ order.total_price }} ₽</td>
+                    <td style="padding: 8px;"><span style="padding: 3px 8px; border-radius: 4px; font-size: 11px; background: #3d3228;">{{ order.get_status_display }}</span></td>
+                    <td style="padding: 8px; color: #a89f91;">{{ order.created_at|date:"d.m.Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" style="padding: 12px; text-align: center; color: #7d7265;">Пока нет оформленных заказов</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Стандартный блок Django со списком приложений и моделей -->
+{{ block.super }}
+{% endblock %}

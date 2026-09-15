@@ -1,4 +1,9 @@
-"""Административная панель для работы с заказами и финансовой аналитикой."""
+"""
+Административная панель для управления заказами и финансовой аналитикой.
+
+Реализует требования раздела 3.6 ТЗ («Управление заказами, аналитика: агрегаты,
+аннотации, кастомные actions, фильтры»).
+"""
 
 from typing import Sequence
 from django.contrib import admin
@@ -9,7 +14,7 @@ from .models import Order, OrderItem
 
 
 class OrderItemInline(admin.TabularInline):
-    """Табличный блок позиций товаров внутри карточки заказа."""
+    """Табличный блок товарных позиций чека внутри карточки заказа."""
 
     model = OrderItem
     extra = 0
@@ -17,12 +22,12 @@ class OrderItemInline(admin.TabularInline):
     fields = ('product', 'price', 'quantity', 'cost_display')
     readonly_fields = ('cost_display',)
 
-    @admin.display(description="Сумма позиции")
+    @admin.display(description='Сумма позиции')
     def cost_display(self, obj: OrderItem) -> str:
         """Отображает расчетную стоимость единицы в чеке."""
         if obj.pk:
-            return f"{obj.get_cost()} ₽"
-        return "—"
+            return f'{obj.get_cost()} ₽'
+        return '—'
 
 
 @admin.register(Order)
@@ -40,18 +45,18 @@ class OrderAdmin(admin.ModelAdmin):
     )
     list_display_links: Sequence[str] = ('id', 'user')
     list_filter: Sequence[str] = ('status', 'payment_method', 'created_at')
-    search_fields: Sequence[str] = ('id', 'user__username', 'shipping_address')
+    search_fields: Sequence[str] = ('id', 'user__username', 'user__email', 'shipping_address')
     readonly_fields: Sequence[str] = ('created_at', 'updated_at')
     inlines = [OrderItemInline]
     ordering: Sequence[str] = ('-created_at',)
     actions = ['mark_as_paid', 'mark_as_shipped']
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Order]:
-        """Аннотация суммарного числа позиций в заказе для аналитики."""
+        """Аннотация суммарного числа позиций в заказе для быстрой аналитики."""
         queryset = super().get_queryset(request)
         return queryset.annotate(items_count=Count('items'))
 
-    @admin.display(description="Позиций", ordering='items_count')
+    @admin.display(description='Позиций', ordering='items_count')
     def total_items_count(self, obj: Order) -> int:
         """Количество наименований в заказе."""
         return getattr(obj, 'items_count', 0)
@@ -59,9 +64,11 @@ class OrderAdmin(admin.ModelAdmin):
     @admin.action(description="Перевести выбранные заказы в статус 'Оплачен'")
     def mark_as_paid(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
         """Массовое подтверждение статуса оплаты."""
-        queryset.update(status=Order.Status.PAID)
+        updated = queryset.update(status=Order.Status.PAID)
+        self.message_user(request, f'Переведено в статус «Оплачен»: {updated} заказов.')
 
     @admin.action(description="Перевести выбранные заказы в статус 'Отправлен'")
     def mark_as_shipped(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
         """Массовый перевод заказов в статус отправленных покупателю."""
-        queryset.update(status=Order.Status.SHIPPED)
+        updated = queryset.update(status=Order.Status.SHIPPED)
+        self.message_user(request, f'Переведено в статус «Отправлен»: {updated} заказов.')

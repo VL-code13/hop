@@ -99,11 +99,11 @@
       </div>
     {% else %}
       <!-- Состояние пустой корзины -->
-      <div style="text-align: center; padding: 60px 20px; background: #fff; border-radius: 12px; border: 1px solid #eaeaea;">
-        <i class="fa-solid fa-basket-shopping" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
-        <h2 style="font-size: 22px; margin-bottom: 10px;">Ваша корзина пуста</h2>
-        <p style="color: #777; margin-bottom: 25px;">Выберите качественные ингредиенты и напитки в нашем каталоге.</p>
-        <a href="{% url 'products:list' %}" class="button button--primary">
+      <div style="text-align: center; padding: 60px 20px; background: #241c16; border-radius: 12px; border: 1px solid #3d3228;">
+        <i class="fa-solid fa-basket-shopping" style="font-size: 48px; color: #7d7265; margin-bottom: 20px;"></i>
+        <h2 style="font-size: 22px; margin-bottom: 10px; color: #f5f0eb;">Ваша корзина пуста</h2>
+        <p style="color: #a89f91; margin-bottom: 25px;">Выберите качественные ингредиенты и оборудование в нашем каталоге.</p>
+        <a href="{% url 'products:product_list' %}" class="button button--primary">
           Перейти в каталог
         </a>
       </div>

@@ -1,4 +1,5 @@
-"""Контроллеры обработки и публикации отзывов покупателей."""
+"""Контроллеры обработки и публикации отзывов покупателей.
+Реализует требования раздела 3.2 ТЗ («возможность оставить отзыв только после покупки»)."""
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -20,7 +21,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
 
     Проверяет:
     1. Покупал ли пользователь этот товар (статус заказа PAID или DELIVERED).
-    2. Оставлял ли пользователь отзыв на этот товар ранее.
+    2. Оставлял ли пользователь отзыв на этот товар ранее (UniqueConstraint).
     """
     product = get_object_or_404(Product, id=product_id, is_active=True)
 

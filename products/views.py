@@ -1,8 +1,9 @@
-"""Классы представлений (CBV) для витрины каталога и страниц товаров."""
+"""Классы представлений (CBV) для витрины каталога и страниц товаров.
+Реализует требования разделов 3.1 («Каталог и поиск») и 3.2 («Страница товара») ТЗ."""
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 from django.db.models import QuerySet, Q, Avg
-from django.views.generic import ListView, DetailView
+from django.views.generic import ListView, DetailView, TemplateView
 
 from products.forms import AddToCartProductForm
 from products.models import Product, Category
@@ -13,11 +14,14 @@ class ProductListView(ListView):
     """
     Представление каталога товаров.
 
-    Обеспечивает пагинацию, полнотекстовый поиск по вхождению в наименование
-    и описание, многоуровневую фильтрацию по категории/цене, а также сортировку.
+    Обеспечивает:
+    - Пагинацию по 9 товаров на страницу;
+    - Полнотекстовый поиск по вхождению в название и описание;
+    - Фильтрацию по категории и диапазону цен (min_price, max_price);
+    - Сортировку по новинкам, цене и популярности (рейтингу).
     """
     model = Product
-    template_name: str = 'products/product_list.html'
+    template_name: str = 'product_list.html'
     context_object_name: str = 'products'
     paginate_by = 9
 
@@ -42,7 +46,7 @@ class ProductListView(ListView):
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
 
-        # 2. Полнотекстовый поиск по названию и детальному описанию
+        # 2. Полнотекстовый поиск по названию и детальному описанию (раздел 3.1 ТЗ)
         search_query: str = self.request.GET.get('q', '').strip()
         if search_query:
             queryset = queryset.filter(
@@ -80,6 +84,7 @@ class ProductListView(ListView):
             dict[str, Any]: Словарь контекста для рендеринга страницы.
         """
         context: dict[str, Any] = super().get_context_data(**kwargs)
+        # Получаем только родительские категории с предзагрузкой подкатегорий
         context['categories'] = (
             Category.objects.filter(parent__isnull=True)
             .prefetch_related('children')
@@ -96,23 +101,24 @@ class ProductListView(ListView):
 
 class ProductDetailView(DetailView):
     """
-    Представление детальной страницы отдельного товара.
+    Представление детальной страницы отдельного товара.(раздел 3.2 ТЗ)
 
     Отображает исчерпывающую информацию о товаре, форму добавления в корзину
     и список пользовательских отзывов с рейтингами.
     """
 
     model = Product
-    template_name: str = 'products/product_detail.html'
+    template_name: str = 'product_detail.html'
     context_object_name: str = 'product'
     slug_url_kwarg: str = 'slug'
+    slug_field = 'slug'
 
     def get_queryset(self) -> QuerySet[Product]:
         """
-        Получает активный товар с предзагрузкой категорий, отзывов и авторов отзывов.
-
-        Возвращает:
-            QuerySet[Product]: QuerySet, оптимизированный от лишних SQL-запросов.
+        Предзагружает связанные сущности:
+                - select_related('category') — категория товара;
+                - prefetch_related('reviews__user') — отзывы и профили их авторов;
+                - annotate(avg_rating) — средний балл товара.
         """
         return (
             Product.objects.filter(is_active=True)
@@ -133,3 +139,12 @@ class ProductDetailView(DetailView):
         context['cart_form'] = AddToCartProductForm(max_stock=product.stock)
         context['reviews'] = product.reviews.all().order_by('-created_at')
         return context
+
+
+class GuidesRecipesView(TemplateView):
+    """
+    Статическая страница руководств и рецептов для пивоваров.
+    Соответствует макету guides-recipes.html.
+    """
+
+    template_name: str = 'guides-recipes.html'

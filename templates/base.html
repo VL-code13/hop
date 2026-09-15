@@ -14,87 +14,91 @@
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- Link to main CSS file -->
+    <!-- Стили -->
     <link rel="stylesheet" href="{% static 'css/main.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
 <header>
     <div class="header-container">
-        <a href="{% url 'products:list' %}" class="header__logo">
+        <a href="{% url 'products:product_list' %}" class="header__logo">
             <img src="{% static 'img/logo.svg' %}" alt="Hop &amp; Barley Logo">
             <p class="logo-text">Hop &amp; Barley</p>
         </a>
 
         <nav class="header__nav">
             <ul>
-                <li><a href="{% url 'products:list' %}">Products</a></li>
-                <li><a href="#">Guides &amp; Recipes</a></li>
-                <li><a href="#">Community</a></li>
-                <li><a href="#">Resources</a></li>
-                <li><a href="#">Contact</a></li>
+                <li><a href="{% url 'products:product_list' %}">Товары</a></li>
+                <li><a href="{% url 'products:guides_recipes' %}">Гайды и рецепты</a></li>
+                <li><a href="#">Сообщество</a></li>
+                <li><a href="#">Контакты</a></li>
             </ul>
         </nav>
 
-        <!-- Разделение состояний авторизации -->
-        {% if request.user.is_authenticated %}
-            <!-- Block for authorized user -->
-            <div class="header__user-actions" id="auth-user" style="display: flex; align-items: center; gap: 15px;">
-                <a href="{% url 'orders:cart_detail' %}" class="cart-icon" aria-label="Shopping Cart" style="position: relative;">
-                    <img src="{% static 'img/icons/Shopping_bag.svg' %}" alt="Shopping Cart">
-                    {% if request.session.cart %}
-                        <span class="cart-badge">{{ request.session.cart|length }}</span>
-                    {% endif %}
+        <div class="header__actions" style="display: flex; align-items: center; gap: 15px;">
+            <!-- Иконка корзины доступна ВСЕМ (и гостям, и авторизованным) -->
+            <a href="{% url 'orders:cart_detail' %}" class="cart-icon" aria-label="Корзина" style="position: relative; display: flex; align-items: center;">
+                <img src="{% static 'img/icons/Shopping_bag.svg' %}" alt="Корзина">
+                {% if cart and cart|length > 0 %}
+                    <span class="cart-badge" style="position: absolute; top: -6px; right: -8px; background: #e8a84c; color: #1c1510; font-size: 11px; font-weight: bold; border-radius: 50%; padding: 2px 6px;">
+                        {{ cart|length }}
+                    </span>
+                {% endif %}
+            </a>
+
+            {% if request.user.is_authenticated %}
+                <!-- Блок авторизованного пользователя -->
+                <a href="{% url 'users:account' %}" class="user-icon" aria-label="Личный кабинет" title="{{ request.user.username }}">
+                    <img src="{% static 'img/icons/User_alt.svg' %}" alt="Личный кабинет">
                 </a>
 
-                <a href="{% url 'users:account' %}" class="user-icon" aria-label="My Account" title="{{ request.user.username }}">
-                    <img src="{% static 'img/icons/User_alt.svg' %}" alt="User Account">
-                </a>
-
-                <!-- Кнопка безопасного выхода POST в Django 5+ -->
                 <form method="post" action="{% url 'users:logout' %}" style="display: inline;">
                     {% csrf_token %}
                     <button type="submit" class="button button--secondary" style="padding: 4px 10px; font-size: 12px; cursor: pointer;">
                         Выйти
                     </button>
                 </form>
-            </div>
-        {% else %}
-            <!-- Block for unauthorized user -->
-            <div class="header__auth-buttons" id="auth-guest">
-                <a href="{% url 'users:login' %}" class="button button--secondary">Войти</a>
-                <a href="{% url 'users:register' %}" class="button button--primary">Регистрация</a>
-            </div>
-        {% endif %}
+            {% else %}
+                <!-- Блок гостя -->
+                <div class="header__auth-buttons" id="auth-guest" style="display: flex; gap: 8px;">
+                    <a href="{% url 'users:login' %}" class="button button--secondary" style="padding: 6px 14px;">Войти</a>
+                    <a href="{% url 'users:register' %}" class="button button--primary" style="padding: 6px 14px;">Регистрация</a>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </header>
 
-<main>
-    {% if messages %}
-        <div class="container messages">
-            {% for message in messages %}
-                <div class="message message-{{ message.tags }}">{{ message }}</div>
-            {% endfor %}
-        </div>
-    {% endif %}
+<!-- Системные flash-сообщения -->
+{% if messages %}
+    <div class="container messages" style="margin-top: 15px;">
+        {% for message in messages %}
+            <div class="message message-{{ message.tags }}" style="padding: 10px 15px; border-radius: 6px; margin-bottom: 10px;
+                 {% if message.tags == 'error' %}background: #3b1818; color: #ff8b8b; border: 1px solid #572a2a;
+                 {% elif message.tags == 'success' %}background: #1e3a24; color: #75d98d; border: 1px solid #2e5937;
+                 {% else %}background: #212c3d; color: #79a8e8; border: 1px solid #32435e;{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
 
-    {% block content %}
-    {% endblock %}
-</main>
+<!-- Основной динамический контент дочерних страниц -->
+{% block content %}
+{% endblock %}
 
-<!-- Footer -->
+<!-- Подвал -->
 <footer>
     <img src="{% static 'img/background/image-footer.svg' %}" alt="Hop &amp; Barley Hops Logo" class="footer__hops-logo">
     <nav class="footer__nav">
         <ul>
-            <li><a href="#">Contact</a></li>
+            <li><a href="#">Контакты</a></li>
             <li><a href="#">FAQ</a></li>
-            <li><a href="#">Community</a></li>
-            <li><a href="#">Resources</a></li>
-            <li><a href="#">License</a></li>
+            <li><a href="#">Сообщество</a></li>
+            <li><a href="#">Лицензия</a></li>
         </ul>
     </nav>
-    <p class="footer__copyright">© Hop &amp; Barley 2026. All rights reserved</p>
+    <p class="footer__copyright">© Hop &amp; Barley 2026. Все права защищены</p>
 </footer>
 
 <script src="{% static 'js/main.js' %}"></script>
