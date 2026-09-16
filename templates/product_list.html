@@ -83,15 +83,15 @@
             </form>
 
             <div class="sort-options">
-                <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}sort=newest"
+                <a href="{% querystring sort='newest' %}"
                    class="sort-button {% if current_sort == 'newest' or not current_sort %}active-sort{% endif %}">
                     Новинки
                 </a>
-                <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}sort=price_asc"
+                <a href="{% querystring sort='price_asc' %}"
                    class="sort-button {% if current_sort == 'price_asc' %}active-sort{% endif %}">
                     Сначала дешевле
                 </a>
-                <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}sort=price_desc"
+                <a href="{% querystring sort='price_desc' %}"
                    class="sort-button {% if current_sort == 'price_desc' %}active-sort{% endif %}">
                     Сначала дороже
                 </a>
@@ -101,63 +101,7 @@
         <!-- Сетка товаров -->
         <div class="product-grid">
             {% for product in products %}
-            <div class="product-card">
-                <a href="{{ product.get_absolute_url }}" class="product-card-link">
-                    {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-card__image">
-                    {% else %}
-                    <img src="{% static 'img/products/citra_hops.jpg' %}" alt="{{ product.name }}"
-                         class="product-card__image">
-                    {% endif %}
-                    <div class="product-card__info">
-                        <h4 class="product-card__name">{{ product.name }}</h4>
-                        <p class="product-card__price">{{ product.price }} ₽</p>
-                        <p class="product-card__description">{{ product.description|truncatewords:10 }}</p>
-                    </div>
-                </a>
-
-                <!-- Блок остатка на складе и быстрой покупки -->
-                <div class="product-card__actions" style="margin-top: auto; border-top: 1px solid #3d3228; padding-top: 12px;">
-                    <div style="margin-bottom: 10px; font-size: 13px;">
-                        {% if product.stock > 0 %}
-                        <span style="color: #4ade80; font-weight: 600;">
-                            В наличии: {{ product.stock }} шт.
-                        </span>
-                        {% else %}
-                        <span style="color: #ff5c5c; font-weight: 600;">
-                            Нет в наличии
-                        </span>
-                        {% endif %}
-                    </div>
-
-                    {% if product.stock > 0 %}
-                    <form action="/cart/add/{{ product.id }}/" method="post"
-                          style="display: flex; gap: 8px; align-items: center;">
-                        {% csrf_token %}
-                        <input type="number"
-                               name="quantity"
-                               value="1"
-                               min="1"
-                               max="{{ product.stock }}"
-                               class="Input"
-                               style="width: 60px; height: 38px; text-align: center; box-sizing: border-box; font-size: 14px;"
-                               aria-label="Количество товара"
-                               required>
-                        <button type="submit"
-                                class="button button--primary"
-                                style="flex: 1; height: 38px; padding: 0 12px; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-cart-shopping"></i> В корзину
-                        </button>
-                    </form>
-                    {% else %}
-                    <button class="button"
-                            style="width: 100%; height: 38px; background: #3d3228; color: #8c8275; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px;"
-                            disabled>
-                        Раскуплено
-                    </button>
-                    {% endif %}
-                </div>
-            </div>
+                {% partial product_card %}
             {% empty %}
             <div style="grid-column: 1 / -1; padding: 40px 0; text-align: center;">
                 <p style="font-size: 18px; color: #a89f91;">Товары по заданным критериям не найдены.</p>
@@ -211,3 +155,63 @@
     </section>
 </div>
 {% endblock %}
+
+{% partialdef product_card %}
+<div class="product-card">
+    <a href="{{ product.get_absolute_url }}" class="product-card-link">
+        {% if product.image %}
+        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-card__image">
+        {% else %}
+        <img src="{% static 'img/products/citra_hops.jpg' %}" alt="{{ product.name }}"
+             class="product-card__image">
+        {% endif %}
+        <div class="product-card__info">
+            <h4 class="product-card__name">{{ product.name }}</h4>
+            <p class="product-card__price">{{ product.price }} ₽</p>
+            <p class="product-card__description">{{ product.description|truncatewords:10 }}</p>
+        </div>
+    </a>
+
+    <!-- Блок остатка на складе и быстрой покупки -->
+    <div class="product-card__actions" style="margin-top: auto; border-top: 1px solid #3d3228; padding-top: 12px;">
+        <div style="margin-bottom: 10px; font-size: 13px;">
+            {% if product.stock > 0 %}
+            <span style="color: #4ade80; font-weight: 600;">
+                В наличии: {{ product.stock }} шт.
+            </span>
+            {% else %}
+            <span style="color: #ff5c5c; font-weight: 600;">
+                Нет в наличии
+            </span>
+            {% endif %}
+        </div>
+
+        {% if product.stock > 0 %}
+        <form action="/cart/add/{{ product.id }}/" method="post"
+              style="display: flex; gap: 8px; align-items: center;">
+            {% csrf_token %}
+            <input type="number"
+                   name="quantity"
+                   value="1"
+                   min="1"
+                   max="{{ product.stock }}"
+                   class="Input"
+                   style="width: 60px; height: 38px; text-align: center; box-sizing: border-box; font-size: 14px;"
+                   aria-label="Количество товара"
+                   required>
+            <button type="submit"
+                    class="button button--primary"
+                    style="flex: 1; height: 38px; padding: 0 12px; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-cart-shopping"></i> В корзину
+            </button>
+        </form>
+        {% else %}
+        <button class="button"
+                style="width: 100%; height: 38px; background: #3d3228; color: #8c8275; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px;"
+                disabled>
+            Раскуплено
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% endpartialdef %}
