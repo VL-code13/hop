@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -17,6 +18,7 @@ from products.models import Product
 from .cart import Cart
 from .forms import OrderCreateForm
 from .models import Order, OrderItem
+
 
 class CartDetailView(View):
     """Отображение содержимого корзины."""
@@ -31,8 +33,17 @@ class CartAddView(View):
 
     def post(self, request: HttpRequest, product_id: int, *args: Any, **kwargs: Any) -> HttpResponse:
         cart = Cart(request)
-        product = get_object_or_404(Product, id=product_id)
-        quantity = int(request.POST.get('quantity', 1))
+        product = get_object_or_404(Product, id=product_id, is_active=True)
+
+        if product.stock <= 0:
+            messages.warning(request, f'Товар «{product.name}» временно отсутствует на складе.')
+            return redirect('orders:cart_detail')
+
+        try:
+            quantity = int(request.POST.get('quantity', 1))
+        except (TypeError, ValueError):
+            quantity = 1
+
         cart.add(product=product, quantity=quantity)
         messages.success(request, f'Товар «{product.name}» добавлен в корзину.')
         return redirect('orders:cart_detail')
@@ -43,8 +54,14 @@ class CartUpdateView(View):
 
     def post(self, request: HttpRequest, product_id: int, *args: Any, **kwargs: Any) -> HttpResponse:
         cart = Cart(request)
-        product = get_object_or_404(Product, id=product_id)
-        quantity = int(request.POST.get('quantity', 1))
+        product = get_object_or_404(Product, id=product_id, is_active=True)
+
+        try:
+            quantity = int(request.POST.get('quantity', 1))
+        except (TypeError, ValueError):
+            messages.error(request, 'Некорректное количество.')
+            return redirect('orders:cart_detail')
+
         cart.add(product=product, quantity=quantity, override_quantity=True)
         return redirect('orders:cart_detail')
 
@@ -93,33 +110,50 @@ class OrderCreateView(LoginRequiredMixin, View):
             phone = form.cleaned_data['phone']
             address = form.cleaned_data['shipping_address']
             full_shipping_info = f"{full_name}, Тел: {phone}\n{address}"
+            payment_method = form.cleaned_data.get('payment_method', Order.PaymentMethod.CASH)
 
-            user_instance = request.user if request.user.is_authenticated else None
-
-            order = Order.objects.create(
-                user=request.user,
-                shipping_address=full_shipping_info,
-                total_price=Decimal(str(cart.get_total_price())),
-                status=Order.Status.PENDING,
-            )
-
+            # Проверка остатков перед оформлением
             for item in cart:
-                OrderItem.objects.create(
-                    order=order,
-                    product=item['product'],
-                    price=item['price'],
-                    quantity=item['quantity'],
+                product = item['product']
+                if product.stock < item['quantity']:
+                    messages.error(
+                        request,
+                        f'Товар «{product.name}» осталось {product.stock} шт. '
+                        f'У вас в корзине {item["quantity"]} шт. Уменьшите количество.',
+                    )
+                    return redirect('orders:cart_detail')
+
+            with transaction.atomic():
+                order = Order.objects.create(
+                    user=request.user,
+                    shipping_address=full_shipping_info,
+                    total_price=Decimal(str(cart.get_total_price())),
+                    status=Order.Status.PENDING,
+                    payment_method=payment_method,
                 )
 
+                for item in cart:
+                    product = item['product']
+                    OrderItem.objects.create(
+                        order=order,
+                        product=product,
+                        price=item['price'],
+                        quantity=item['quantity'],
+                    )
+                    # Списание остатка
+                    product.stock -= item['quantity']
+                    product.save(update_fields=['stock'])
+
             cart.clear()
+            messages.success(request, f'Заказ №{order.id} успешно оформлен!')
             return redirect('orders:order_success', order_id=order.id)
 
         return render(request, 'checkout.html', {'cart': cart, 'form': form})
 
 
-class OrderSuccessView(View):
+class OrderSuccessView(LoginRequiredMixin, View):
     """Страница подтверждения успешно созданного заказа."""
 
     def get(self, request: HttpRequest, order_id: int, *args: Any, **kwargs: Any) -> HttpResponse:
-        order = get_object_or_404(Order, id=order_id)
+        order = get_object_or_404(Order, id=order_id, user=request.user)
         return render(request, 'order_success.html', {'order': order})

@@ -1,151 +1,88 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ product.name }} | Hop &amp; Barley{% endblock %}
+{% block title %}{{ product.name }} | Hop & Barley{% endblock %}
 
 {% block content %}
-<main class="page-product">
-    <div class="container">
-        <!-- Секция основной информации о товаре -->
-        <section class="product-details-section">
-            <div class="product-image-container">
-                {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image">
-                {% else %}
-                    <img src="{% static 'img/products/citra_hops.jpg' %}" alt="{{ product.name }}" class="product-image">
-                {% endif %}
-            </div>
+<!-- MAIN SECTION -->
 
-            <div class="product-info-column">
-                <div class="product-title-price">
-                    <h1 class="product-name">{{ product.name }}</h1>
-                    <div class="price-section">
-                        <span class="price-tag">Категория: {{ product.category.name }}</span>
-                        <p class="product-price">{{ product.price }} ₽</p>
-                    </div>
-                </div>
+{% if product.image %}
+  <img src="{{ product.image.url }}" alt="{{ product.name }}">
+{% else %}
+  <img src="{% static 'img/no-image.png' %}" alt="{{ product.name }}">
+{% endif %}
 
-                <div class="product-description">
-                    <p>{{ product.description|linebreaksbr }}</p>
-                </div>
+<h1>{{ product.name }}</h1>
 
-                <!-- Блок добавления в корзину -->
-                <div class="cart-controls">
-                    {% if product.stock > 0 %}
-                        <form method="post" action="{% url 'orders:cart_add' product.id %}" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                            {% csrf_token %}
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <label for="id_quantity" style="font-weight: 600; font-size: 14px; color: #a89f91;">Количество:</label>
-                                <input type="number"
-                                       name="quantity"
-                                       id="id_quantity"
-                                       value="1"
-                                       min="1"
-                                       max="{{ product.stock }}"
-                                       class="search-input"
-                                       style="width: 70px; padding: 8px; text-align: center;">
-                            </div>
+<p>Категория: <a href="{{ product.category.get_absolute_url }}">{{ product.category.name }}</a></p>
 
-                            <button type="submit" class="button button--primary add-to-cart-button" id="add-to-cart-btn">
-                                <i class="fa-solid fa-cart-shopping"></i>
-                                <span>В корзину</span>
-                            </button>
-                        </form>
-                        <p style="margin-top: 10px; font-size: 13px; color: #75d98d;">
-                            <i class="fa-solid fa-check"></i> В наличии на складе: {{ product.stock }} шт.
-                        </p>
-                    {% else %}
-                        <div style="padding: 12px 18px; background-color: #3b1818; border-radius: 8px; border: 1px solid #572a2a; color: #ff8b8b; font-weight: 600;">
-                            <i class="fa-solid fa-circle-exclamation"></i> Данный товар временно отсутствует на складе
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </section>
+<p class="price">{{ product.price }} ₽</p>
 
-        <!-- Аккордеон с техническими характеристиками -->
-        <section class="accordion-section">
-            <div class="accordion-item">
-                <div class="accordion-title">
-                    <h3>Характеристики товара</h3>
-                    <i class="fa-solid fa-chevron-down accordion-icon"></i>
-                </div>
-                <div class="accordion-content">
-                    <ul>
-                        <li><strong>Категория:</strong> {{ product.category.name }}</li>
-                        <li><strong>Артикул / ID:</strong> #{{ product.id }}</li>
-                        <li><strong>Дата поступления:</strong> {{ product.created_at|date:"d.m.Y" }}</li>
-                        <li><strong>Складской статус:</strong> {% if product.stock > 0 %}В наличии ({{ product.stock }} шт.){% else %}Ожидается поставка{% endif %}</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+<p>{{ product.description|linebreaksbr }}</p>
 
-        <!-- Секция отзывов покупателей (Раздел 3.2 ТЗ) -->
-        <section class="reviews-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <h2 class="reviews-title" style="margin-bottom: 0;">Отзывы покупателей</h2>
-            </div>
+{% if product.stock > 0 %}
+  <form action="{% url 'orders:cart_add' product.id %}" method="post">
+    {% csrf_token %}
+    <label for="id_quantity">Количество:</label>
+    {{ cart_form.quantity }}
+    <button type="submit">В корзину</button>
+  </form>
+  <p>В наличии на складе: {{ product.stock }} шт.</p>
+{% else %}
+  <p>Данный товар временно отсутствует на складе</p>
+{% endif %}
 
-            <!-- Форма отправки отзыва (проверка авторизации) -->
-            {% if request.user.is_authenticated %}
-                <div style="background: #241c16; border: 1px solid #3d3228; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #e8a84c;">Оставить отзыв о товаре</h3>
-                    <form method="post" action="{% url 'reviews:add_review' product.id %}">
-                        {% csrf_token %}
-                        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-                            <label for="id_rating" style="font-weight: 600; color: #a89f91;">Оценка:</label>
-                            <select name="rating" id="id_rating" class="search-input" style="width: 130px; padding: 6px 10px;">
-                                <option value="5">5 звезд</option>
-                                <option value="4">4 звезды</option>
-                                <option value="3">3 звезды</option>
-                                <option value="2">2 звезды</option>
-                                <option value="1">1 звезда</option>
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <textarea name="comment" rows="3" class="search-input" style="width: 100%; border-radius: 6px; padding: 10px;" placeholder="Поделитесь впечатлениями о вкусе, аромате или свойствах (доступно только после покупки)..." required></textarea>
-                        </div>
-                        <button type="submit" class="button button--primary" style="padding: 8px 18px;">Опубликовать отзыв</button>
-                    </form>
-                </div>
-            {% else %}
-                <div style="padding: 12px 16px; background-color: #241c16; border: 1px solid #3d3228; border-radius: 6px; margin-bottom: 24px; font-size: 14px; color: #a89f91;">
-                    Чтобы оставить отзыв, пожалуйста, <a href="{% url 'users:login' %}?next={{ request.path }}" style="color: #e8a84c; font-weight: 600; text-decoration: underline;">войдите в аккаунт</a>.
-                </div>
-            {% endif %}
+<h3>Характеристики товара</h3>
+<ul>
+  <li>Категория: {{ product.category.name }}</li>
+  <li>Артикул / ID: #{{ product.id }}</li>
+  <li>Дата поступления: {{ product.created_at|date:"d.m.Y" }}</li>
+  <li>Складской статус: {% if product.stock > 0 %}В наличии ({{ product.stock }} шт.){% else %}Ожидается поставка{% endif %}</li>
+</ul>
 
-            <!-- Список ранее опубликованных отзывов -->
-            <div class="reviews-grid">
-                {% for review in product.reviews.all %}
-                    <div class="review-card">
-                        <div class="review-rating" style="color: #e8a84c;">
-                            {% for i in "12345" %}
-                                {% if forloop.counter <= review.rating %}
-                                    <i class="fa-solid fa-star"></i>
-                                {% else %}
-                                    <i class="fa-regular fa-star" style="color: #55483c;"></i>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        <div class="review-body">
-                            <p class="review-text">{{ review.comment|linebreaksbr }}</p>
-                        </div>
-                        <div class="review-author">
-                            <img src="{% static 'img/icons/User_alt.svg' %}" alt="Аватар пользователя" class="author-avatar">
-                            <div>
-                                <span class="author-name">{{ review.user.username }}</span>
-                                <span style="display: block; font-size: 11px; color: #a89f91;">{{ review.created_at|date:"d.m.Y" }}</span>
-                            </div>
-                        </div>
-                    </div>
-                {% empty %}
-                    <div style="grid-column: 1 / -1; padding: 25px; background: #241c16; border: 1px dashed #3d3228; border-radius: 8px; text-align: center; color: #a89f91;">
-                        К этому товару пока нет отзывов. Станьте первым покупателем, оставившим отзыв!
-                    </div>
-                {% endfor %}
-            </div>
-        </section>
-    </div>
-</main>
+<h2>Отзывы покупателей</h2>
+
+{% if can_review %}
+  <h3>Оставить отзыв о товаре</h3>
+  <form action="{% url 'reviews:add_review' product.id %}" method="post">
+    {% csrf_token %}
+    <p>
+      <label for="{{ review_form.rating.id_for_label }}">Оценка:</label>
+      {{ review_form.rating }}
+    </p>
+    <p>
+      <label for="{{ review_form.comment.id_for_label }}">Комментарий:</label>
+      {{ review_form.comment }}
+    </p>
+    {% if review_form.comment.errors %}
+      <p class="error">{{ review_form.comment.errors.0 }}</p>
+    {% endif %}
+    <button type="submit">Опубликовать отзыв</button>
+  </form>
+
+{% elif has_existing_review %}
+  <p>Вы уже оставили отзыв на этот товар. Спасибо!</p>
+
+{% elif request.user.is_authenticated %}
+  <p>Отзыв можно оставить только на товар, который вы приобрели и оплатили.</p>
+
+{% else %}
+  <p>Чтобы оставить отзыв, пожалуйста, <a href="{% url 'users:login' %}">войдите в аккаунт</a>.</p>
+{% endif %}
+
+{% for review in product.reviews.all %}
+  <div class="review">
+    <p class="review-rating">
+      {% for i in "12345" %}
+        {% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}
+      {% endfor %}
+    </p>
+    <p class="review-comment">{{ review.comment|linebreaksbr }}</p>
+    <p class="review-author">{{ review.user.username }} · {{ review.created_at|date:"d.m.Y" }}</p>
+  </div>
+{% empty %}
+  <p>К этому товару пока нет отзывов. Станьте первым покупателем, оставившим отзыв!</p>
+{% endfor %}
+
+<!-- END MAIN SECTION -->
 {% endblock %}

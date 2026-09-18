@@ -5,12 +5,11 @@
 """
 
 import re
-from typing import Any
 from django import forms
 from django.core.validators import RegexValidator
 
 phone_validator = RegexValidator(
-    regex=r'^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
+    regex=r'^(\+7|7|8)?[\s\-]?$?[3-9][0-9]{2}$?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
     message="Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567)."
 )
 

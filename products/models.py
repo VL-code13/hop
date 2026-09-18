@@ -1,5 +1,6 @@
 """Модели базы данных для категорий и товаров каталога."""
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 
@@ -7,28 +8,28 @@ from django.urls import reverse
 class Category(models.Model):
     """Категория товаров с поддержкой иерархической вложенности."""
 
-    name: models.CharField = models.CharField(
+    name = models.CharField(
         max_length=255,
         verbose_name="Название",
     )
-    slug: models.SlugField = models.SlugField(
+    slug = models.SlugField(
         max_length=255,
         unique=True,
         verbose_name="Slug",
     )
-    parent: models.ForeignKey = models.ForeignKey(
+    parent = models.ForeignKey(
         "self",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="children",
         verbose_name="Родительская категория",
     )
-    created_at: models.DateTimeField = models.DateTimeField(
+    created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Дата создания",
     )
-    updated_at: models.DateTimeField = models.DateTimeField(
+    updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name="Дата обновления",
     )
@@ -55,53 +56,54 @@ class Product(models.Model):
     и статусе активности (раздел 4 ТЗ).
     """
 
-    name: models.CharField = models.CharField(
+    name = models.CharField(
         max_length=255,
         verbose_name="Название",
     )
-    slug: models.SlugField = models.SlugField(
+    slug = models.SlugField(
         max_length=255,
         unique=True,
         verbose_name="Slug",
     )
-    description: models.TextField = models.TextField(
+    description = models.TextField(
         blank=True,
         verbose_name="Описание",
     )
-    price: models.DecimalField = models.DecimalField(
+    price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        validators=[MinValueValidator(0)],
         verbose_name="Цена",
         help_text='Текущая розничная цена за единицу товара.',
     )
-    category: models.ForeignKey = models.ForeignKey(
+    category = models.ForeignKey(
         Category,
         on_delete=models.PROTECT,
         related_name="products",
         verbose_name="Категория",
         help_text='Категория, к которой привязан товар.',
     )
-    image: models.ImageField = models.ImageField(
+    image = models.ImageField(
         upload_to="products/%Y/%m/",
         blank=True,
         null=True,
         verbose_name="Изображение товара",
     )
-    is_active: models.BooleanField = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
         help_text='Отображать ли товар на витрине магазина.',
     )
-    stock: models.PositiveIntegerField = models.PositiveIntegerField(
+    stock = models.PositiveIntegerField(
         default=0,
         verbose_name="Остаток на складе",
         help_text='Количество доступных для заказа единиц.',
     )
-    created_at: models.DateTimeField = models.DateTimeField(
+    created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Дата добавления",
     )
-    updated_at: models.DateTimeField = models.DateTimeField(
+    updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name="Дата изменения",
     )
@@ -110,9 +112,7 @@ class Product(models.Model):
         verbose_name = "Товар"
         verbose_name_plural = "Товары"
         ordering = ["-created_at"]
-        # Индексация для ускорения выборок и сортировок (раздел 3.1 ТЗ)
         indexes = [
-            models.Index(fields=["slug"]),
             models.Index(fields=["-created_at"]),
             models.Index(fields=["price"]),
         ]

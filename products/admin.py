@@ -59,7 +59,14 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields: Sequence[str] = ('name', 'description')
     prepopulated_fields: dict[str, Sequence[str]] = {'slug': ('name',)}
     list_editable: Sequence[str] = ('stock', 'price', 'is_active')
+    readonly_fields: Sequence[str] = ('created_at',)
+    date_hierarchy: str = 'created_at'
     actions: list[str] = ['make_active', 'make_inactive']
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Product]:
+        """Оптимизация запроса: select_related для категории."""
+        queryset = super().get_queryset(request)
+        return queryset.select_related('category')
 
     @admin.action(description='Сделать выбранные товары активными')
     def make_active(self, request: HttpRequest, queryset: QuerySet[Product]) -> None:

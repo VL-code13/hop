@@ -6,6 +6,7 @@
 
 from decimal import Decimal
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from products.models import Product
 
@@ -114,6 +115,7 @@ class OrderItem(models.Model):
     )
     quantity = models.PositiveIntegerField(
         default=1,
+        validators=[MinValueValidator(1)],
         verbose_name='Количество',
     )
     price = models.DecimalField(
