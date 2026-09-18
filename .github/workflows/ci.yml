@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
-      - develop
+      - dev_3st_week
   pull_request:
     branches:
       - main
-      - develop
+      - dev_3st_week
 
 jobs:
   backend:
