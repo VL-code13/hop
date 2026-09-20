@@ -12,7 +12,6 @@
         <form method="post" action="{% url 'users:register' %}">
             {% csrf_token %}
 
-            <!-- Общие не-полевые ошибки формы -->
             {% if form.non_field_errors %}
                 <div class="form-errors" style="background: #3b1818; color: #ff8b8b; border: 1px solid #572a2a; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 13px;">
                     {% for error in form.non_field_errors %}
@@ -21,7 +20,6 @@
                 </div>
             {% endif %}
 
-            <!-- Поле Email -->
             <div class="form-group" style="margin-bottom: 18px;">
                 <label for="id_email" style="display: block; color: #d6cebf; font-size: 13px; font-weight: 500; margin-bottom: 6px;">Email</label>
                 <input type="email"
@@ -40,7 +38,6 @@
                 {% endif %}
             </div>
 
-            <!-- Поле Пароль -->
             <div class="form-group" style="margin-bottom: 18px;">
                 <label for="id_password1" style="display: block; color: #d6cebf; font-size: 13px; font-weight: 500; margin-bottom: 6px;">Пароль</label>
                 <input type="password"
@@ -57,7 +54,6 @@
                 {% endif %}
             </div>
 
-            <!-- Подтверждение пароля -->
             <div class="form-group" style="margin-bottom: 24px;">
                 <label for="id_password2" style="display: block; color: #d6cebf; font-size: 13px; font-weight: 500; margin-bottom: 6px;">Повторите пароль</label>
                 <input type="password"

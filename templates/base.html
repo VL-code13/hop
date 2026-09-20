@@ -6,15 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Hop &amp; Barley{% endblock %}</title>
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <!-- Стили -->
     <link rel="stylesheet" href="{% static 'css/main.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
@@ -36,7 +33,6 @@
         </nav>
 
         <div class="header__actions" style="display: flex; align-items: center; gap: 15px;">
-            <!-- Иконка корзины доступна ВСЕМ (и гостям, и авторизованным) -->
             <a href="{% url 'orders:cart_detail' %}" class="cart-icon" aria-label="Корзина" style="position: relative; display: flex; align-items: center;">
                 <img src="{% static 'img/icons/Shopping_bag.svg' %}" alt="Корзина">
                 {% if cart and cart|length > 0 %}
@@ -47,7 +43,6 @@
             </a>
 
             {% if request.user.is_authenticated %}
-                <!-- Блок авторизованного пользователя -->
                 <a href="{% url 'users:account' %}" class="user-icon" aria-label="Личный кабинет" title="{{ request.user.username }}">
                     <img src="{% static 'img/icons/User_alt.svg' %}" alt="Личный кабинет">
                 </a>
@@ -59,17 +54,15 @@
                     </button>
                 </form>
             {% else %}
-                <!-- Блок гостя -->
                 <div class="header__auth-buttons" id="auth-guest" style="display: flex; gap: 8px;">
-                    <a href="{% url 'users:login' %}" class="button button--secondary" style="padding: 6px 14px;">Войти</a>
-                    <a href="{% url 'users:register' %}" class="button button--primary" style="padding: 6px 14px;">Регистрация</a>
+                    <a href="{% url 'users:login' %}" class="button button--secondary" style="padding: 6px 14px; text-decoration: none;">Войти</a>
+                    <a href="{% url 'users:register' %}" class="button button--primary" style="padding: 6px 14px; text-decoration: none;">Регистрация</a>
                 </div>
             {% endif %}
         </div>
     </div>
 </header>
 
-<!-- Системные flash-сообщения -->
 {% if messages %}
     <div class="container messages" style="margin-top: 15px;">
         {% for message in messages %}
@@ -83,11 +76,9 @@
     </div>
 {% endif %}
 
-<!-- Основной динамический контент дочерних страниц -->
 {% block content %}
 {% endblock %}
 
-<!-- Подвал -->
 <footer>
     <img src="{% static 'img/background/image-footer.svg' %}" alt="Hop &amp; Barley Hops Logo" class="footer__hops-logo">
     <nav class="footer__nav">

@@ -14,20 +14,17 @@ from rest_framework.permissions import AllowAny
 from .models import Product
 from .serializers import ProductDetailSerializer, ProductListSerializer
 
-# Лучшие практики: Разделение спискового и детального сериализаторов (get_serializer_class) позволяет не
-# отдавать тяжелое текстовое описание в общем листинге товаров, экономя сетевой трафик.
-
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet для просмотра списка и деталей товаров каталога (раздел 3.7 ТЗ).
 
-    Поддерживает фильтрацию по категории и диапазону цен,
-    поиск по названию и описанию, сортировку по цене, дате
-    создания и рейтингу.
+    Поддерживает:
+    - фильтрацию по категории (category__slug) и диапазону цен;
+    - поиск по названию и описанию (?search=...);
+    - сортировку по цене, новизне и расчетному рейтингу (?ordering=...).
     """
 
-    # lookup_field: str = 'slug' # если захотим по слагу вместо ИД
     permission_classes: list = [AllowAny]
     filter_backends: list = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields: dict = {
@@ -39,15 +36,24 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self) -> QuerySet[Product]:
+        """
+        Возвращает активные товары с предварительной загрузкой категории (JOIN)
+        и аннотированием среднего рейтинга по связанным отзывам.
+        """
         return (
             Product.objects.filter(is_active=True)
             .select_related('category')
-            .annotate(avg_rating=Avg('review__rating'))
+            # Исправлено: 'reviews__rating' (было 'review__rating') в соответствии с related_name
+            .annotate(avg_rating=Avg('reviews__rating'))
             .order_by('-created_at')
         )
 
     def get_serializer_class(self) -> Any:
-        """Динамический выбор сериализатора: облегченный для списка, полный для детали."""
+        """
+        Динамический выбор сериализатора:
+        - ProductDetailSerializer для детального просмотра (action == 'retrieve')
+        - ProductListSerializer для общего каталога (action == 'list')
+        """
         if self.action == 'retrieve':
             return ProductDetailSerializer
         return ProductListSerializer

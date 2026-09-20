@@ -59,6 +59,7 @@ class OrdersBusinessLogicTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         cart = self.client.session.get('cart', {})
+        # При превышении остатка корзина не пополняется
         self.assertEqual(cart.get(str(self.product.id), {}).get('quantity', 0), 0)
 
     def test_checkout_creates_order_and_deducts_stock(self) -> None:
@@ -66,7 +67,8 @@ class OrdersBusinessLogicTestCase(TestCase):
         Успешное оформление заказа:
         1. Создает запись Order и OrderItem;
         2. Списывает остаток товара на складе;
-        3. Очищает сессионную корзину.
+        3. Очищает сессионную корзину;
+        4. Делает редирект на success.
         """
         self.client.login(username='brewmaster@example.com', password='strong_password_123')
 
@@ -79,12 +81,11 @@ class OrdersBusinessLogicTestCase(TestCase):
         checkout_data = {
             'full_name': 'Иван Пивоваров',
             'phone': '+7 (999) 111-22-33',
-            'city': 'Санкт-Петербург',
             'shipping_address': 'Лиговский проспект, д. 50',
             'payment_method': Order.PaymentMethod.CARD,
         }
         response = self.client.post(reverse('orders:checkout'), data=checkout_data)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
 
         # Проверяем уменьшение остатка
         self.product.refresh_from_db()

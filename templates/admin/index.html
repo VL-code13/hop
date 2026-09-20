@@ -58,10 +58,18 @@
             <tbody>
                 {% for order in recent_orders %}
                 <tr style="border-bottom: 1px solid #2e241c;">
-                    <td style="padding: 8px;"><a href="{% url 'admin:orders_order_change' order.id %}" style="color: #e8a84c; font-weight: bold;">#{{ order.id }}</a></td>
+                    <td style="padding: 8px;">
+                        <a href="{% url 'custom_admin:orders_order_change' order.id %}" style="color: #e8a84c; font-weight: bold;">
+                            #{{ order.id }}
+                        </a>
+                    </td>
                     <td style="padding: 8px;">{{ order.user.username }}</td>
                     <td style="padding: 8px;">{{ order.total_price }} ₽</td>
-                    <td style="padding: 8px;"><span style="padding: 3px 8px; border-radius: 4px; font-size: 11px; background: #3d3228;">{{ order.get_status_display }}</span></td>
+                    <td style="padding: 8px;">
+                        <span style="padding: 3px 8px; border-radius: 4px; font-size: 11px; background: #3d3228;">
+                            {{ order.get_status_display }}
+                        </span>
+                    </td>
                     <td style="padding: 8px; color: #a89f91;">{{ order.created_at|date:"d.m.Y H:i" }}</td>
                 </tr>
                 {% empty %}

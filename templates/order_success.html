@@ -6,16 +6,20 @@
 <main class="container" style="padding: 60px 20px; text-align: center;">
     <div style="max-width: 600px; margin: 0 auto; background: #241c16; padding: 40px; border-radius: 12px; border: 1px solid #3d3228;">
         <i class="fa-solid fa-circle-check" style="font-size: 64px; color: #75d98d; margin-bottom: 20px;"></i>
-        <h1 style="font-size: 26px; margin-bottom: 12px; color: #f5f0eb;">Спасибо за заказ!</h1>
+        <h1 style="font-size: 26px; margin-bottom: 12px; color: #f5f0eb; font-weight: 700;">Спасибо за заказ!</h1>
         <p style="font-size: 16px; color: #d6cebf; margin-bottom: 20px;">
             Номер вашего заказа: <strong style="color: #e8a84c;">#{{ order.id }}</strong>. Сумма: <strong style="color: #e8a84c;">{{ order.total_price }} ₽</strong>.
         </p>
-        <p style="font-size: 14px; color: #a89f91; margin-bottom: 30px;">
+        <p style="font-size: 14px; color: #a89f91; margin-bottom: 30px; line-height: 1.5;">
             Подтверждение отправлено на ваш email. Вы можете отслеживать статус выполнения в личном кабинете.
         </p>
         <div style="display: flex; justify-content: center; gap: 15px;">
-            <a href="{% url 'products:product_list' %}" class="button button--secondary">В каталог</a>
-            <a href="{% url 'users:account' %}" class="button button--primary">История заказов</a>
+            <a href="{% url 'products:product_list' %}" class="button button--secondary" style="padding: 10px 20px; text-decoration: none;">
+                В каталог
+            </a>
+            <a href="{% url 'users:account' %}" class="button button--primary" style="padding: 10px 20px; text-decoration: none;">
+                История заказов
+            </a>
         </div>
     </div>
 </main>

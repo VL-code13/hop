@@ -5,7 +5,6 @@
 категориями, аннотации, фильтры, кастомные actions»).
 """
 
-
 from django.contrib import admin
 from django.db.models import Count, QuerySet
 from django.http import HttpRequest
@@ -26,6 +25,7 @@ class CategoryAdmin(admin.ModelAdmin):
     )
     list_filter = ('parent',)
     search_fields = ('name', 'slug')
+    # Автоматическое заполнение слага из названия при вводе в админке
     prepopulated_fields = {'slug': ('name',)}
     ordering = ('name',)
 
@@ -58,13 +58,15 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'category', 'created_at')
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
+    # Быстрое редактирование остатка, цены и активности прямо в таблице списка
     list_editable = ('stock', 'price', 'is_active')
-    readonly_fields = ('created_at',)
+    # Добавлены оба временных поля в readonly
+    readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'created_at'
     actions = ['make_active', 'make_inactive']
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Product]:
-        """Оптимизация запроса: select_related для категории."""
+        """Оптимизация запроса: подгрузка категории через JOIN (select_related)."""
         queryset = super().get_queryset(request)
         return queryset.select_related('category')
 
@@ -76,6 +78,6 @@ class ProductAdmin(admin.ModelAdmin):
 
     @admin.action(description='Снять выбранные товары с витрины')
     def make_inactive(self, request: HttpRequest, queryset: QuerySet[Product]) -> None:
-        """Массовый action для деактивации товаров."""
+        """Массовый action для деактивации товаров (снятия с продажи)."""
         updated_count = queryset.update(is_active=False)
         self.message_user(request, f'Снято с витрины товаров: {updated_count}.')

@@ -2,7 +2,7 @@ import os
 
 from .base import *
 
-ALLOWED_HOSTS = ['example.com']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'example.com').split(',')
 DEBUG = False
 
 # Database

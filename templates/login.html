@@ -12,7 +12,6 @@
         <form method="post" action="{% url 'users:login' %}">
             {% csrf_token %}
 
-            <!-- Ошибки неверного логина/пароля -->
             {% if form.non_field_errors %}
                 <div class="login-errors" style="background: #3b1818; color: #ff8b8b; border: 1px solid #572a2a; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 13px;">
                     {% for error in form.non_field_errors %}
@@ -21,7 +20,6 @@
                 </div>
             {% endif %}
 
-            <!-- Поле ввода Email или логина -->
             <div class="form-group" style="margin-bottom: 18px;">
                 <label for="id_username" style="display: block; color: #d6cebf; font-size: 13px; font-weight: 500; margin-bottom: 6px;">Email или имя пользователя</label>
                 <input type="text"
@@ -40,7 +38,6 @@
                 {% endif %}
             </div>
 
-            <!-- Поле ввода пароля со ссылкой "Забыли пароль?" -->
             <div class="form-group" style="margin-bottom: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <label for="id_password" style="color: #d6cebf; font-size: 13px; font-weight: 500; margin: 0;">Пароль</label>

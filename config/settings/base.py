@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',  # JWT аутентификация по ТЗ
     'drf_spectacular',
+    'django_filters',
     # Приложения проекта
     'products',
     'orders',
@@ -36,12 +37,18 @@ INSTALLED_APPS = [
     'reviews',
     'payments',
 ]
-# Настройка генератора схемы REST Framework
+
+# Настройка генератора схемы REST Framework и фильтрации
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 9,
@@ -58,6 +65,7 @@ SPECTACULAR_SETTINGS = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -108,13 +116,14 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-# File storage configuration
+
+# File storage configuration (WhiteNoise сжатие и хеширование)
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 
@@ -134,21 +143,10 @@ LOGOUT_REDIRECT_URL: str = 'products:product_list'
 EMAIL_BACKEND: str = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL: str = 'Hop & Barley <noreply@hopandbarley.com>'
 
-# Новый формат Django 6+: простой список email-адресов строк
-ADMINS: list[str] = [
-    'admin@hopandbarley.com',
+# Список администраторов (кортежи: имя, email)
+ADMINS = [
+    ('Admin', 'admin@hopandbarley.com'),
 ]
-
-# Конфигурация Django REST Framework (разделы 2 и 3.7 ТЗ)
-REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-    ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
-}
 
 # Настройки JWT-аутентификации SimpleJWT
 SIMPLE_JWT: dict[str, object] = {
@@ -158,6 +156,7 @@ SIMPLE_JWT: dict[str, object] = {
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
 AUTHENTICATION_BACKENDS = [
     'users.backends.EmailOrUsernameModelBackend',
     'django.contrib.auth.backends.ModelBackend',

@@ -12,7 +12,6 @@
             <form id="checkout-form" method="post" action="{% url 'orders:checkout' %}">
                 {% csrf_token %}
 
-                <!-- Данные доставки и контакты получателя -->
                 <section class="checkout-section">
                     <h2 class="checkout-section__title">Данные для доставки</h2>
 
@@ -39,7 +38,6 @@
                                name="phone"
                                class="Input"
                                placeholder="+7 (999) 000-00-00"
-                               pattern="^(\+7|8)[\s\-]?\(?[0-9]{3}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$"
                                title="Формат: +7 (999) 000-00-00 или 89990000000"
                                value="{{ form.phone.value|default:'' }}"
                                required>
@@ -66,7 +64,6 @@
                     </div>
                 </section>
 
-                <!-- Способ оплаты -->
                 <section class="checkout-section">
                     <h2 class="checkout-section__title">Способ оплаты</h2>
                     <div class="payment-options">
@@ -88,7 +85,6 @@
                     </div>
                 </section>
 
-                <!-- Состав заказа -->
                 <section class="checkout-summary">
                     <h2 class="checkout-section__title">Сводка заказа</h2>
 
@@ -116,7 +112,7 @@
             <div style="text-align: center; padding: 50px 20px; background: #241c16; border-radius: 8px; border: 1px solid #3d3228;">
                 <h2 style="color: #f5f0eb;">Ваша корзина пуста</h2>
                 <p style="color: #a89f91; margin: 15px 0 25px;">Вы не можете перейти к оформлению без выбранных товаров.</p>
-                <a href="{% url 'products:product_list' %}" class="button button--primary">Перейти в каталог</a>
+                <a href="{% url 'products:product_list' %}" class="button button--primary" style="text-decoration: none;">Перейти в каталог</a>
             </div>
         {% endif %}
     </div>

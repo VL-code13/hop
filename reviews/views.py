@@ -1,10 +1,7 @@
 """
-Контроллеры обработки и публикации отзывов покупателей.
+Контроллеры обработки и публикации отзывов покупателей через веб-интерфейс.
 
-Реализует требования раздела 3.2 ТЗ:
-- Отзыв можно оставить только после покупки и оплаты товара.
-- Один пользователь = один отзыв на товар (ограничение UniqueConstraint).
-- Рейтинг — целое число от 1 до 5 (валидация в модели).
+Реализует требования раздела 3.2 ТЗ.
 """
 
 from typing import Any
@@ -14,75 +11,44 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from orders.models import Order
 from products.models import Product
 
-from .forms import ReviewForm
-from .models import Review
+from .serializers import ReviewSerializer
 
 
-@login_required  # Только авторизованный пользователь может оставить отзыв
-@require_POST  # Разрешаем только POST — отзыв создаётся, но не читается этим эндпоинтом
+@login_required
+@require_POST
 def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     """
-    Добавляет отзыв на товар через веб-форму.
+    Обработчик формы добавления отзыва на товар.
 
-    Бизнес-правила (раздел 3.2 ТЗ):
-    1. Пользователь должен быть авторизован (@login_required).
-    2. Пользователь должен купить товар — заказ со статусом PAID или DELIVERED.
-    3. Один отзыв на товар от одного пользователя (UniqueConstraint в модели).
-
-    @login_required гарантирует, что request.user — авторизованный пользователь,
-    а не AnonymousUser. Аннотация `user: Any` сужает тип для mypy без рантайм-проверок:
-    mypy перестаёт ругаться на доступ к .profile, передачу в фильтры и т.д.
+    Вся валидация (проверка покупки, уникальность отзыва, лимиты рейтинга)
+    делегирована в ReviewSerializer для соблюдения принципа DRY.
     """
-    # Сужаем тип: декоратор @login_required уже отсёк AnonymousUser в рантайме.
-    # Any убирает ошибки mypy без накладных расходов на isinstance-проверку.
-    user: Any = request.user
+    product = get_object_or_404(Product, id=product_id, is_active=True)[cite: 88]
 
-    # Находим товар или возвращаем 404. is_active=True скрывает удалённые товары.
-    product = get_object_or_404(Product, id=product_id, is_active=True)
+    # Передаем данные POST и контекст в ReviewSerializer
+    serializer = ReviewSerializer(
+        data=request.POST,
+        context={'request': request, 'product': product},
+    )
 
-    # --- Проверка 1: факт покупки ---
-    # Ищем заказ текущего пользователя, в котором есть данный товар,
-    # и статус заказа — PAID (оплачен) или DELIVERED (доставлен).
-    # Заказы в статусе PENDING (корзина/ожидание оплаты) не дают права на отзыв.
-    has_purchased: bool = Order.objects.filter(
-        user=user,
-        items__product=product,  # JOIN через OrderItem
-        status__in=[Order.Status.PAID, Order.Status.DELIVERED],
-    ).exists()
+    try:
+        if serializer.is_valid():
+            serializer.save()
+            messages.success(request, 'Спасибо! Ваш отзыв успешно опубликован.')[cite: 88]
+        else:
+            # Извлекаем ошибки валидации полей (например, rating)
+            for err_list in serializer.errors.values():
+                for err in err_list:
+                    messages.error(request, str(err))
+    except PermissionDenied as e:
+        # Ошибка отсутствия факта покупки товара (раздел 3.2 ТЗ)
+        messages.error(request, str(e.detail))
+    except ValidationError as e:
+        # Ошибка повторного отзыва (UniqueConstraint)
+        messages.warning(request, str(e.detail[0] if isinstance(e.detail, list) else e.detail))
 
-    if not has_purchased:
-        # Покупки нет — показываем ошибку и возвращаем на страницу товара.
-        messages.error(
-            request,
-            'Оставить отзыв можно только на товар, который вы уже приобрели и оплатили.',
-        )
-        return redirect(product.get_absolute_url())
-
-    # --- Проверка 2: повторный отзыв ---
-    # UniqueConstraint в модели Review не даёт создать второй отзыв на уровне БД,
-    # но мы проверяем здесь, чтобы вернуть понятное сообщение, а не 500-ю ошибку.
-    if Review.objects.filter(product=product, user=user).exists():
-        messages.warning(request, 'Вы уже оставляли отзыв на данный товар.')
-        return redirect(product.get_absolute_url())
-
-    # --- Сохранение отзыва ---
-    # ReviewForm валидирует рейтинг (1–5) и текст комментария.
-    form = ReviewForm(request.POST)
-    if form.is_valid():
-        # commit=False — создаём объект Review в памяти, но не пишем в БД.
-        # Нужно, чтобы проставить product и user до сохранения.
-        review = form.save(commit=False)
-        review.product = product
-        review.user = user
-        review.save()
-        messages.success(request, 'Спасибо! Ваш отзыв успешно опубликован.')
-    else:
-        # Форма невалидна — рейтинг вне диапазона или пустой комментарий.
-        messages.error(request, 'Пожалуйста, проверьте правильность заполнения формы.')
-
-    # Возвращаем на страницу товара — там отображается список отзывов.
-    return redirect(product.get_absolute_url())
+    return redirect(product.get_absolute_url())[cite: 88]

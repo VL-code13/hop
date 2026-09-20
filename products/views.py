@@ -1,5 +1,7 @@
-"""Классы представлений (CBV) для витрины каталога и страниц товаров.
-Реализует требования разделов 3.1 («Каталог и поиск») и 3.2 («Страница товара») ТЗ."""
+"""
+Классы представлений (CBV) для витрины каталога и страниц товаров.
+Реализует требования разделов 3.1 («Каталог и поиск») и 3.2 («Страница товара») ТЗ.
+"""
 
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -17,8 +19,9 @@ class ProductListView(ListView):
 
     Обеспечивает:
     - Пагинацию по 9 товаров на страницу;
-    - Полнотекстовый поиск по вхождению в название и описание;
-    - Фильтрацию по категории и диапазону цен (min_price, max_price);
+    - Поиск по вхождению подстроки в название и описание;
+    - Фильтрацию по категории (как через URL slug, так и через GET ?category=);
+    - Фильтрацию по минимальной и максимальной цене;
     - Сортировку по новинкам, цене и популярности (рейтингу).
     """
 
@@ -30,9 +33,7 @@ class ProductListView(ListView):
     def get_queryset(self) -> QuerySet[Product]:
         """
         Формирует оптимизированный набор данных товаров с учетом всех GET-фильтров.
-
-        Использует select_related для категории во избежание проблем с N+1 запросами
-        и annotate для расчета среднего рейтинга на базе отзывов.
+        Использует select_related во избежание N+1 запросов к категориям.
         """
         queryset: QuerySet[Product] = (
             Product.objects.filter(is_active=True)
@@ -40,14 +41,17 @@ class ProductListView(ListView):
             .annotate(avg_rating=Avg('reviews__rating'))
         )
 
+        # 1. Фильтрация по категории: из path-параметра или GET-запроса
         category_slug: str | None = self.kwargs.get('category_slug') or self.request.GET.get('category')
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
 
+        # 2. Полнотекстовый поиск по подстроке в имени и описании (регистронезависимый)
         search_query: str = self.request.GET.get('q', '').strip()
         if search_query:
             queryset = queryset.filter(Q(name__icontains=search_query) | Q(description__icontains=search_query))
 
+        # 3. Фильтрация по диапазону цен с защитой от ввода нечисловых данных
         min_price: str | None = self.request.GET.get('min_price')
         max_price: str | None = self.request.GET.get('max_price')
         try:
@@ -58,6 +62,7 @@ class ProductListView(ListView):
         except (InvalidOperation, ValueError):
             pass
 
+        # 4. Сортировка по белому списку параметров (fallback на '-created_at')
         sort_parameter: str = self.request.GET.get('sort', 'newest')
         sort_mapping: dict[str, str] = {
             'price_asc': 'price',
@@ -70,7 +75,9 @@ class ProductListView(ListView):
         return queryset.order_by(order_field)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Передает в шаблон параметры для сохранения состояния фильтров в UI."""
         context: dict[str, Any] = super().get_context_data(**kwargs)
+        # Получаем только корневые категории и заранее подгружаем подкатегории (дерево)
         context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related('children')
         context['current_category'] = self.kwargs.get('category_slug') or self.request.GET.get('category', '')
         context['current_sort'] = self.request.GET.get('sort', 'newest')
@@ -82,10 +89,13 @@ class ProductListView(ListView):
 
 class ProductDetailView(DetailView):
     """
-    Представление детальной страницы отдельного товара. (раздел 3.2 ТЗ)
+    Представление детальной страницы отдельного товара (раздел 3.2 ТЗ).
 
-    Отображает исчерпывающую информацию о товаре, форму добавления в корзину
-    и список пользовательских отзывов с рейтингами.
+    Отображает:
+    - Информацию о товаре с оптимизированной загрузкой категории и отзывов;
+    - Форму быстрой покупки с ограничением по реальному остатку;
+    - Список отзывов;
+    - Проверку бизнес-правила: разрешено оставлять отзыв только покупателям (PAID/DELIVERED).
     """
 
     model = Product
@@ -95,6 +105,10 @@ class ProductDetailView(DetailView):
     slug_field = 'slug'
 
     def get_queryset(self) -> QuerySet[Product]:
+        """
+        Предварительно подгружает автора каждого отзыва через prefetch_related,
+        чтобы избежать N+1 запросов при рендере блока отзывов.
+        """
         return (
             Product.objects.filter(is_active=True)
             .select_related('category')
@@ -103,24 +117,22 @@ class ProductDetailView(DetailView):
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """
-        Передает в шаблон форму выбора количества, список отзывов
-        и флаги can_review / has_existing_review.
-
-        can_review: пользователь купил товар (PAID/DELIVERED) и ещё не оставил отзыв.
-        has_existing_review: пользователь уже оставил отзыв на этот товар.
-        """
         context: dict[str, Any] = super().get_context_data(**kwargs)
         product: Product = self.object  # type: ignore[assignment]
+
+        # Передаем остаток для клиентской и серверной валидации формы
         context['cart_form'] = AddToCartProductForm(max_stock=product.stock)
         context['reviews'] = product.reviews.all().order_by('-created_at')
 
+        # Ленивый импорт во избежание циклических зависимостей между приложениями
         from reviews.forms import ReviewForm
-
         context['review_form'] = ReviewForm()
 
         can_review = False
         has_existing_review = False
+
+        # Проверка бизнес-правила раздела 3.2 ТЗ:
+        # Оставить отзыв может только авторизованный покупатель с оплаченным/доставленным заказом
         if self.request.user.is_authenticated:
             from orders.models import Order
             from reviews.models import Review
@@ -129,6 +141,8 @@ class ProductDetailView(DetailView):
                 product=product,
                 user=self.request.user,
             ).exists()
+
+            # Если отзыва еще нет, проверяем факт успешной покупки данного товара
             if not has_existing_review:
                 can_review = Order.objects.filter(
                     user=self.request.user,
@@ -142,6 +156,6 @@ class ProductDetailView(DetailView):
 
 
 class GuidesRecipesView(TemplateView):
-    """Статическая страница руководств и рецептов для пивоваров."""
+    """Статическая страница руководств и рецептов для домашних пивоваров."""
 
     template_name: str = 'guides-recipes.html'

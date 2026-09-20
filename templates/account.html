@@ -6,10 +6,10 @@
 {% block content %}
 <main class="account-page">
     <div class="account-container">
-        <!-- Боковая колонка: Профиль и Навигация -->
+        <!-- Боковая колонка -->
         <aside class="account-sidebar">
             <div class="user-card" style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                <div class="user-card__avatar" style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden;">
+                <div class="user-card__avatar" style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: #1c1510;">
                     <img src="{% if user.profile.avatar %}{{ user.profile.avatar.url }}{% else %}{% static 'img/icons/User_alt.svg' %}{% endif %}" alt="Аватар пользователя" style="width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <div class="user-card__info">
@@ -37,7 +37,7 @@
             </nav>
         </aside>
 
-        <!-- Основной блок контента личного кабинета -->
+        <!-- Основной контент -->
         <section class="account-content">
             <!-- 1. История заказов -->
             <div id="orders-section" class="account-block">
@@ -77,7 +77,7 @@
                                 <strong style="color: #e5ded3;">Адрес доставки:</strong> {{ order.shipping_address|default:"Не указан"|linebreaksbr }}
                             </div>
                             <div style="text-align: right; font-size: 16px; font-weight: 700; color: #f5f0eb;">
-                                Итого к оплате: <span style="color: #e8a84c;">{{ order.total_price }} ₽</span>
+                                Итого: <span style="color: #e8a84c;">{{ order.total_price }} ₽</span>
                             </div>
                         </div>
                     </div>
@@ -85,7 +85,7 @@
                     <div class="orders-empty" style="text-align: center; padding: 40px 20px; background: #241c16; border-radius: 8px; border: 1px solid #3d3228;">
                         <i class="fa-solid fa-basket-shopping" style="font-size: 40px; color: #7d7265; margin-bottom: 15px;"></i>
                         <p style="color: #c4b9aa; margin-bottom: 20px;">У вас пока нет оформленных заказов.</p>
-                        <a href="{% url 'products:product_list' %}" class="button button--primary" style="display: inline-flex; width: auto; padding: 10px 20px;">Перейти к покупкам</a>
+                        <a href="{% url 'products:product_list' %}" class="button button--primary" style="display: inline-flex; width: auto; padding: 10px 20px; text-decoration: none;">Перейти к покупкам</a>
                     </div>
                     {% endfor %}
                 </div>
@@ -103,35 +103,35 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                         <div class="InputField">
-                            <label for="{{ profile_form.first_name.id_for_label }}">Имя</label>
+                            <label for="{{ profile_form.first_name.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Имя</label>
                             {{ profile_form.first_name }}
                         </div>
                         <div class="InputField">
-                            <label for="{{ profile_form.last_name.id_for_label }}">Фамилия</label>
+                            <label for="{{ profile_form.last_name.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Фамилия</label>
                             {{ profile_form.last_name }}
                         </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px;">
                         <div class="InputField">
-                            <label for="{{ profile_form.email.id_for_label }}">Email</label>
+                            <label for="{{ profile_form.email.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Email</label>
                             {{ profile_form.email }}
                             {% if profile_form.email.errors %}
                                 <div style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">{{ profile_form.email.errors.0 }}</div>
                             {% endif %}
                         </div>
                         <div class="InputField">
-                            <label for="{{ profile_form.phone.id_for_label }}">Телефон для связи</label>
+                            <label for="{{ profile_form.phone.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Телефон</label>
                             {{ profile_form.phone }}
                         </div>
                     </div>
 
                     <div class="InputField" style="margin-bottom: 20px;">
-                        <label for="{{ profile_form.default_shipping_address.id_for_label }}">Основной адрес доставки</label>
+                        <label for="{{ profile_form.default_shipping_address.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Основной адрес доставки</label>
                         {{ profile_form.default_shipping_address }}
                     </div>
 
-                    <button type="submit" class="button button--primary" style="padding: 10px 24px;">Сохранить изменения</button>
+                    <button type="submit" class="button button--primary" style="padding: 10px 24px; cursor: pointer;">Сохранить изменения</button>
                 </form>
             </div>
 
@@ -154,7 +154,7 @@
                     {% endif %}
 
                     <div class="InputField" style="margin-bottom: 15px;">
-                        <label for="{{ password_form.old_password.id_for_label }}">Текущий пароль</label>
+                        <label for="{{ password_form.old_password.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Текущий пароль</label>
                         {{ password_form.old_password }}
                         {% if password_form.old_password.errors %}
                             <div style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">{{ password_form.old_password.errors.0 }}</div>
@@ -163,14 +163,14 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                         <div class="InputField">
-                            <label for="{{ password_form.new_password1.id_for_label }}">Новый пароль</label>
+                            <label for="{{ password_form.new_password1.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Новый пароль</label>
                             {{ password_form.new_password1 }}
                             {% if password_form.new_password1.errors %}
                                 <div style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">{{ password_form.new_password1.errors.0 }}</div>
                             {% endif %}
                         </div>
                         <div class="InputField">
-                            <label for="{{ password_form.new_password2.id_for_label }}">Повторите новый пароль</label>
+                            <label for="{{ password_form.new_password2.id_for_label }}" style="display: block; color: #d6cebf; font-size: 13px; margin-bottom: 6px;">Повторите пароль</label>
                             {{ password_form.new_password2 }}
                             {% if password_form.new_password2.errors %}
                                 <div style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">{{ password_form.new_password2.errors.0 }}</div>
@@ -178,15 +178,15 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="button button--secondary" style="padding: 10px 24px;">Обновить пароль</button>
+                    <button type="submit" class="button button--secondary" style="padding: 10px 24px; cursor: pointer;">Обновить пароль</button>
                 </form>
             </div>
 
-            <!-- 4. Удаление аккаунта (Soft Delete) -->
+            <!-- 4. Деактивация -->
             <div class="account-block" style="margin-top: 40px; padding: 25px; background: #2a1b1b; border: 1px solid #572a2a; border-radius: 8px;">
                 <h3 style="color: #ff8b8b; margin-top: 0; font-size: 18px; margin-bottom: 8px;">Деактивация аккаунта</h3>
                 <p style="color: #f0c4c4; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
-                    При деактивации доступ к профилю блокируется. В соответствии с финансовыми правилами, история ваших ранее совершенных покупок будет сохранена в зашифрованном архиве.
+                    При деактивации доступ к профилю блокируется. Вся история ваших ранее совершенных покупок будет сохранена в зашифрованном архиве.
                 </p>
                 <form method="post" action="{% url 'users:delete_account' %}" onsubmit="return confirm('Вы уверены, что хотите деактивировать аккаунт?');">
                     {% csrf_token %}
