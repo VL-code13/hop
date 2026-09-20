@@ -23,7 +23,7 @@ class Cart:
 
     def __init__(self, request: HttpRequest) -> None:
         self.session = request.session
-        cart: dict[str, dict[str, Any]] = self.session.get(CART_SESSION_ID)
+        cart: dict[str, dict[str, Any]] = self.session.get(CART_SESSION_ID) or {}
         if not cart:
             cart = self.session[CART_SESSION_ID] = {}
         self.cart: dict[str, dict[str, Any]] = cart
@@ -42,21 +42,21 @@ class Cart:
         if product.stock <= 0:
             return
 
-        if override_quantity:
-            if quantity <= 0:
-                if product_id in self.cart:
-                    del self.cart[product_id]
-                    self.save()
-                return
-            new_quantity = quantity
-        else:
-            new_quantity = self.cart[product_id]['quantity'] + quantity
-
+        # Сначала убеждаемся, что запись существует — потом считаем
         if product_id not in self.cart:
             self.cart[product_id] = {
                 'quantity': 0,
                 'price': str(product.price),
             }
+
+        if override_quantity:
+            if quantity <= 0:
+                del self.cart[product_id]
+                self.save()
+                return
+            new_quantity = quantity
+        else:
+            new_quantity = self.cart[product_id]['quantity'] + quantity
 
         self.cart[product_id]['quantity'] = min(new_quantity, product.stock)
         self.save()

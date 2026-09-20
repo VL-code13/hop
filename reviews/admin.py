@@ -15,18 +15,18 @@ from .models import Review
 class ReviewAdmin(admin.ModelAdmin):
     """Конфигурация админ-зоны для управления и модерации отзывов."""
 
-    list_display: Sequence[str] = (
+    list_display = (
         'id',
         'user',
         'product',
         'rating',
         'created_at',
     )
-    list_filter: Sequence[str] = ('rating', 'created_at', 'product__category')
-    search_fields: Sequence[str] = ('user__username', 'user__email', 'product__name', 'comment')
+    list_filter = ('rating', 'created_at', 'product__category')
+    search_fields = ('user__username', 'user__email', 'product__name', 'comment')
     # product и user не редактируются — иначе сломается UniqueConstraint
     # и связь отзыва с реальной покупкой
-    readonly_fields: Sequence[str] = ('product', 'user', 'created_at')
-    raw_id_fields: Sequence[str] = ('product', 'user')
-    date_hierarchy: str = 'created_at'
-    ordering: Sequence[str] = ('-created_at',)
+    readonly_fields = ('product', 'user', 'created_at')
+    raw_id_fields = ('product', 'user')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)

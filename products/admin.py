@@ -18,17 +18,17 @@ from .models import Category, Product
 class CategoryAdmin(admin.ModelAdmin):
     """Конфигурация админ-зоны для товарных категорий (раздел 3.6 ТЗ)."""
 
-    list_display: Sequence[str] = (
+    list_display = (
         'name',
         'slug',
         'parent',
         'products_count',
         'created_at',
     )
-    list_filter: Sequence[str] = ('parent',)
-    search_fields: Sequence[str] = ('name', 'slug')
-    prepopulated_fields: dict[str, Sequence[str]] = {'slug': ('name',)}
-    ordering: Sequence[str] = ('name',)
+    list_filter = ('parent',)
+    search_fields = ('name', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ('name',)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Category]:
         """
@@ -48,7 +48,7 @@ class CategoryAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     """Конфигурация админ-зоны для управления товарами (раздел 3.6 ТЗ)."""
 
-    list_display: Sequence[str] = (
+    list_display = (
         'name',
         'category',
         'price',
@@ -56,13 +56,13 @@ class ProductAdmin(admin.ModelAdmin):
         'is_active',
         'created_at',
     )
-    list_filter: Sequence[str] = ('is_active', 'category', 'created_at')
-    search_fields: Sequence[str] = ('name', 'description')
-    prepopulated_fields: dict[str, Sequence[str]] = {'slug': ('name',)}
-    list_editable: Sequence[str] = ('stock', 'price', 'is_active')
-    readonly_fields: Sequence[str] = ('created_at',)
-    date_hierarchy: str = 'created_at'
-    actions: list[str] = ['make_active', 'make_inactive']
+    list_filter = ('is_active', 'category', 'created_at')
+    search_fields = ('name', 'description')
+    prepopulated_fields = {'slug': ('name',)}
+    list_editable = ('stock', 'price', 'is_active')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+    actions = ['make_active', 'make_inactive']
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Product]:
         """Оптимизация запроса: select_related для категории."""

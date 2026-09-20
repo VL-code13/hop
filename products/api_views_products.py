@@ -6,7 +6,8 @@
 from typing import Any
 
 from django.db.models import Avg, QuerySet
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend  # type: ignore[import-untyped]
+
 from rest_framework import filters, viewsets
 from rest_framework.permissions import AllowAny
 
@@ -26,7 +27,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     создания и рейтингу.
     """
 
-    # lookup_field: str = 'slug' # если хзахотим по слагу вместо ИД
+    # lookup_field: str = 'slug' # если захотим по слагу вместо ИД
     permission_classes: list = [AllowAny]
     filter_backends: list = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields: dict = {

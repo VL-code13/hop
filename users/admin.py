@@ -42,6 +42,6 @@ class UserAdmin(BaseUserAdmin):
 class ProfileAdmin(admin.ModelAdmin):
     """Отдельный список профилей в админке для быстрого поиска по контактам."""
 
-    list_display: Sequence[str] = ('id', 'user', 'phone', 'created_at')
-    search_fields: Sequence[str] = ('user__username', 'user__email', 'phone', 'default_shipping_address')
-    readonly_fields: Sequence[str] = ('created_at', 'updated_at')
+    list_display = ('id', 'user', 'phone', 'created_at')
+    search_fields = ('user__username', 'user__email', 'phone', 'default_shipping_address')
+    readonly_fields = ('created_at', 'updated_at')

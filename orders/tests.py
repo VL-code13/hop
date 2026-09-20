@@ -92,6 +92,7 @@ class OrdersBusinessLogicTestCase(TestCase):
         # Проверяем создание заказа в базе
         order = Order.objects.filter(user=self.user).first()
         self.assertIsNotNone(order)
+        assert order is not None
         self.assertEqual(order.total_price, Decimal('1860.00'))
 
         # Проверяем очистку корзины

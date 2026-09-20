@@ -27,7 +27,7 @@ class HopBarleyAdminSite(admin.AdminSite):
     index_title = 'Аналитический дашборд и управление'
     index_template = 'admin/index.html'
 
-    def index(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
+    def index(self, request):  # type: ignore[override]
         """
         Формирует контекст аналитического дашборда на главной странице админки.
 

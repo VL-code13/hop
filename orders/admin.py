@@ -23,7 +23,7 @@ class OrderItemInline(admin.TabularInline):
     raw_id_fields = ('product',)
     fields = ('product', 'price', 'quantity', 'cost_display')
     # price — снимок цены на момент покупки, нельзя менять задним числом
-    readonly_fields: Sequence[str] = ('price', 'cost_display')
+    readonly_fields = ('price', 'cost_display')
 
     @admin.display(description='Сумма позиции')
     def cost_display(self, obj: OrderItem) -> str:
@@ -37,7 +37,7 @@ class OrderItemInline(admin.TabularInline):
 class OrderAdmin(admin.ModelAdmin):
     """Управление заказами: фильтры, поиск, кастомные действия и аналитика (раздел 3.6 ТЗ)."""
 
-    list_display: Sequence[str] = (
+    list_display = (
         'id',
         'user',
         'status',
@@ -46,15 +46,15 @@ class OrderAdmin(admin.ModelAdmin):
         'total_price',
         'created_at',
     )
-    list_display_links: Sequence[str] = ('id', 'user')
-    list_filter: Sequence[str] = ('status', 'payment_method', 'created_at')
-    search_fields: Sequence[str] = ('id', 'user__username', 'user__email', 'shipping_address')
+    list_display_links = ('id', 'user')
+    list_filter = ('status', 'payment_method', 'created_at')
+    search_fields = ('id', 'user__username', 'user__email', 'shipping_address')
     # total_price — вычисляемое финансовое поле, не редактируется руками
-    readonly_fields: Sequence[str] = ('created_at', 'updated_at', 'total_price')
-    raw_id_fields: Sequence[str] = ('user',)
-    date_hierarchy: str = 'created_at'
+    readonly_fields = ('created_at', 'updated_at', 'total_price')
+    raw_id_fields = ('user',)
+    date_hierarchy = 'created_at'
     inlines = [OrderItemInline]
-    ordering: Sequence[str] = ('-created_at',)
+    ordering = ('-created_at',)
     actions = ['mark_as_paid', 'mark_as_shipped', 'show_revenue']
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Order]:

@@ -3,7 +3,7 @@ ast_serialize==0.11.2
 attrs==26.1.0
 Django==6.1.1
 django-filter==26.1
-django-stubs==6.1.0
+django-stubs==6.1.1
 django-stubs-ext==6.1.0
 djangorestframework==3.18.0
 djangorestframework-stubs==3.18.1
@@ -14,7 +14,7 @@ iniconfig==2.3.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 librt==0.15.0
-mypy==2.3.1
+mypy==1.13.0
 mypy_extensions==1.1.0
 packaging==26.3
 pathspec==1.1.1

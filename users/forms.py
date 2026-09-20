@@ -108,7 +108,7 @@ class UserRegisterForm(forms.ModelForm):
         return email
 
     def clean(self) -> dict[str, Any]:
-        cleaned_data = super().clean()
+        cleaned_data = super().clean() or {}
         p1 = cleaned_data.get('password1')
         p2 = cleaned_data.get('password2')
 

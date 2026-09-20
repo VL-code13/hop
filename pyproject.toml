@@ -5,18 +5,18 @@ exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
 
 [tool.ruff.lint]
 select = [
-    "E",     # pycodestyle errors
-    "W",     # pycodestyle warnings
-    "F",     # pyflakes (unused imports, variables)
-    "I",     # isort (импорты)
-    "B",     # flake8-bugbear
-    "UP",    # pyupgrade
-    "SIM",   # flake8-simplify
-    "C4",    # flake8-comprehensions
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes (unused imports, variables)
+    "I", # isort (импорты)
+    "B", # flake8-bugbear
+    "UP", # pyupgrade
+    "SIM", # flake8-simplify
+    "C4", # flake8-comprehensions
 ]
 ignore = [
-    "E501",  # длина строки — ruff format справится
-    "B008",  # Function call in default argument (Django: default=Decimal('0.00'))
+    "E501", # длина строки — ruff format справится
+    "B008", # Function call in default argument (Django: default=Decimal('0.00'))
 ]
 
 [tool.ruff.lint.isort]
@@ -30,4 +30,10 @@ indent-style = "space"
 "config/settings/*.py" = ["F403", "F405"]
 "*/tests.py" = ["E402"]
 "*/tests/*.py" = ["E402"]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.development"
 

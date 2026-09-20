@@ -49,7 +49,7 @@ class ProductCatalogTestCase(TestCase):
 
     def test_catalog_displays_only_active_products(self) -> None:
         """Каталог отображает только активные товары (is_active=True)."""
-        response = self.client.get(reverse('products:list'))
+        response = self.client.get(reverse('products:product_list'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Citra Hops')
         self.assertContains(response, 'Pilsner Malt')
@@ -64,21 +64,21 @@ class ProductCatalogTestCase(TestCase):
 
     def test_search_by_query_string(self) -> None:
         """Поиск по подстроке в названии или описании (параметр q)."""
-        response = self.client.get(reverse('products:list'), {'q': 'грейпфрут'})
+        response = self.client.get(reverse('products:product_list'), {'q': 'грейпфрут'})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Citra Hops')
         self.assertNotContains(response, 'Pilsner Malt')
 
     def test_filter_by_price_range(self) -> None:
         """Фильтрация по минимальной и максимальной цене."""
-        response = self.client.get(reverse('products:list'), {'min_price': '300', 'max_price': '600'})
+        response = self.client.get(reverse('products:product_list'), {'min_price': '300', 'max_price': '600'})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Citra Hops')
         self.assertNotContains(response, 'Pilsner Malt')
 
     def test_product_detail_view_and_stock_property(self) -> None:
         """Детальная страница открывается и корректно рассчитывает свойство in_stock."""
-        response = self.client.get(reverse('products:detail', kwargs={'slug': 'citra-hops'}))
+        response = self.client.get(reverse('products:product_detail', kwargs={'slug': 'citra-hops'}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Citra Hops')
         self.assertContains(response, '550.00 ₽')

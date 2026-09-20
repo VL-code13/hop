@@ -69,6 +69,7 @@ class UserAuthenticationAndProfileTestCase(TestCase):
 
         new_user = User.objects.filter(email='newbrewer@hopbarley.ru').first()
         self.assertIsNotNone(new_user)
+        assert new_user is not None
         self.assertTrue(new_user.is_active)
         self.assertTrue(Profile.objects.filter(user=new_user).exists())
 
@@ -76,7 +77,7 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         """Анонимный пользователь при попытке входа в ЛК перенаправляется на форму логина."""
         response = self.client.get(reverse('users:account'))
         self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse('users:login'), response.url)
+        self.assertIn(reverse('users:login'), response.url)  # type: ignore
 
     def test_update_profile_contact_data(self) -> None:
         """Обновление контактов и адреса доставки в личном кабинете."""
@@ -173,8 +174,8 @@ class UserJWTAPITestCase(TestCase):
         }
         response = self.client.post(reverse('token_obtain_pair'), data=payload)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertIn('access', response.data)  # type: ignore
+        self.assertIn('refresh', response.data)  # type: ignore
 
     def test_obtain_token_pair_by_email(self) -> None:
         """Получение JWT-токенов по email (EmailOrUsernameModelBackend)."""
@@ -184,8 +185,8 @@ class UserJWTAPITestCase(TestCase):
         }
         response = self.client.post(reverse('token_obtain_pair'), data=payload)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertIn('access', response.data)  # type: ignore
+        self.assertIn('refresh', response.data)  # type: ignore
 
     def test_refresh_jwt_token(self) -> None:
         """Обновление access-токена с помощью refresh-токена."""
@@ -193,11 +194,11 @@ class UserJWTAPITestCase(TestCase):
             reverse('token_obtain_pair'),
             data={'username': 'api_brewer', 'password': 'ApiPassword123!'},
         )
-        refresh_token = obtain_response.data['refresh']
+        refresh_token = obtain_response.data['refresh']  # type: ignore
 
         refresh_response = self.client.post(
             reverse('token_refresh'),
             data={'refresh': refresh_token},
         )
         self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', refresh_response.data)
+        self.assertIn('access', refresh_response.data)  # type: ignore

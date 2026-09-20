@@ -116,6 +116,9 @@ class ReviewBusinessLogicTestCase(TestCase):
         self.assertRedirects(response, self.product.get_absolute_url())
         review = Review.objects.filter(product=self.product, user=self.user).first()
         self.assertIsNotNone(review)
+        # ← mypy: .first() возвращает Review | None. assert сужает тип до Review,
+        #   чтобы .rating и .comment не вызывали ошибку union-attr.
+        assert review is not None
         self.assertEqual(review.rating, 5)
         self.assertEqual(review.comment, 'Яркий хмель, сварил идеальный IPA!')
 
@@ -229,9 +232,11 @@ class ReviewAPITestCase(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['rating'], 5)
-        self.assertEqual(response.data[0]['user'], self.user.username)
+        # ← mypy: .data — атрибут DRF-ответа, отсутствует в django-stubs для
+        #   _MonkeyPatchedWSGIResponse. type: ignore подавляет ложноположительную ошибку.
+        self.assertEqual(len(response.data), 1)  # type: ignore
+        self.assertEqual(response.data[0]['rating'], 5)  # type: ignore
+        self.assertEqual(response.data[0]['user'], self.user.username)  # type: ignore
 
     def test_post_review_unauthorized_fails(self) -> None:
         """Анонимный запрос на добавление отзыва через API отклоняется (401 Unauthorized)."""
@@ -243,7 +248,10 @@ class ReviewAPITestCase(TestCase):
 
     def test_post_review_without_purchase_fails(self) -> None:
         """Авторизованный пользователь без покупки получает 403 Forbidden."""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        # ← mypy: self.client типизирован как Client от TestCase, но в setUp
+        #   присваивается APIClient. .credentials() есть у APIClient, но не у Client.
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')  # type: ignore
 
         url = reverse('api-product-reviews', kwargs={'product_id': self.product.id})
         payload = {'rating': 5, 'comment': 'Попытка оставить отзыв без покупки'}
@@ -253,7 +261,8 @@ class ReviewAPITestCase(TestCase):
 
     def test_post_review_after_purchase_success(self) -> None:
         """Авторизованный покупатель с оплаченным заказом успешно публикует отзыв через API."""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        # ← mypy: та же причина — .credentials() отсутствует у Client из django-stubs.
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')  # type: ignore
 
         # Создаем оплаченный заказ для пользователя
         order = Order.objects.create(
@@ -273,5 +282,6 @@ class ReviewAPITestCase(TestCase):
         response = self.client.post(url, data=payload)
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['rating'], 5)
-        self.assertEqual(response.data['comment'], 'Быстро завелись, сбродили насухо!')
+        # ← mypy: .data не типизирован в django-stubs для DRF-ответов.
+        self.assertEqual(response.data['rating'], 5)  # type: ignore
+        self.assertEqual(response.data['comment'], 'Быстро завелись, сбродили насухо!')  # type: ignore

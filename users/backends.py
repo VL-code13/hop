@@ -22,7 +22,7 @@ class EmailOrUsernameModelBackend(ModelBackend):
     Соответствует требованиям гибкой авторизации по разделу 3.5 ТЗ.
     """
 
-    def authenticate(
+    def authenticate(  # type: ignore[override]
         self,
         request: HttpRequest | None,
         username: str | None = None,
