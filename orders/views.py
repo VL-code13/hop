@@ -21,7 +21,7 @@ from django.views.generic import View
 
 from products.models import Product
 
-from .cart import Cart           # Класс-обёртка над сессионной корзиной
+from .cart import Cart  # Класс-обёртка над сессионной корзиной
 from .forms import OrderCreateForm
 from .models import Order, OrderItem
 
@@ -172,7 +172,7 @@ class OrderCreateView(LoginRequiredMixin, View):
             full_name = form.cleaned_data['full_name']
             phone = form.cleaned_data['phone']
             address = form.cleaned_data['shipping_address']
-            full_shipping_info = f"{full_name}, Тел: {phone}\n{address}"
+            full_shipping_info = f'{full_name}, Тел: {phone}\n{address}'
             payment_method = form.cleaned_data.get('payment_method', Order.PaymentMethod.CASH)
 
             # --- Проверка остатков ДО транзакции ---

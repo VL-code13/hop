@@ -3,6 +3,7 @@
 
 Реализует требования разделов 6.3 («Тестирование: корзина, заказ, бизнес-правила») и 8 ТЗ.
 """
+
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model

@@ -58,10 +58,7 @@ class CustomLoginView(LoginView):
 
         Stock LoginView не показывает messages — мы добавляем для UX.
         """
-        messages.error(
-            self.request,
-            'Неверный email/логин или пароль. Пожалуйста, проверьте введённые данные.'
-        )
+        messages.error(self.request, 'Неверный email/логин или пароль. Пожалуйста, проверьте введённые данные.')
         return super().form_invalid(form)
 
 
@@ -136,8 +133,7 @@ class ReactivatePasswordResetConfirmView(PasswordResetConfirmView):
             user.is_active = True
             user.save(update_fields=['is_active'])
             messages.success(
-                self.request,
-                'Ваш аккаунт был успешно реактивирован! Все оформленные ранее заказы сохранены.'
+                self.request, 'Ваш аккаунт был успешно реактивирован! Все оформленные ранее заказы сохранены.'
             )
         return super().form_valid(form)
 
@@ -173,10 +169,13 @@ class AccountView(LoginRequiredMixin, View):
         # Форма редактирования профиля.
         # instance=user — форма привязана к текущему пользователю.
         # initial — предзаполнение полей phone и address из профиля.
-        profile_form = ProfileUpdateForm(instance=user, initial={
-            'phone': user.profile.phone,
-            'default_shipping_address': user.profile.default_shipping_address,
-        })
+        profile_form = ProfileUpdateForm(
+            instance=user,
+            initial={
+                'phone': user.profile.phone,
+                'default_shipping_address': user.profile.default_shipping_address,
+            },
+        )
 
         # Форма смены пароля (Django PasswordChangeForm).
         password_form = PasswordChangeCustomForm(user=user)

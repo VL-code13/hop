@@ -27,7 +27,7 @@ User = get_user_model()
 
 phone_validator = RegexValidator(
     regex=r'^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
-    message="Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567)."
+    message='Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567).',
 )
 
 
@@ -36,20 +36,24 @@ class UserLoginForm(AuthenticationForm):
 
     username = forms.CharField(
         label='Email или имя пользователя',
-        widget=forms.TextInput(attrs={
-            'class': 'Input',
-            'placeholder': 'brewer@hopbarley.ru',
-            'id': 'id_username',
-            'autofocus': True,
-        })
+        widget=forms.TextInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': 'brewer@hopbarley.ru',
+                'id': 'id_username',
+                'autofocus': True,
+            }
+        ),
     )
     password = forms.CharField(
         label='Пароль',
-        widget=forms.PasswordInput(attrs={
-            'class': 'Input',
-            'placeholder': '••••••••',
-            'id': 'id_password',
-        })
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': '••••••••',
+                'id': 'id_password',
+            }
+        ),
     )
 
 
@@ -61,27 +65,33 @@ class UserRegisterForm(forms.ModelForm):
 
     email = forms.EmailField(
         label='Email',
-        widget=forms.EmailInput(attrs={
-            'class': 'Input',
-            'placeholder': 'brewer@hopbarley.ru',
-            'required': True,
-        })
+        widget=forms.EmailInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': 'brewer@hopbarley.ru',
+                'required': True,
+            }
+        ),
     )
     password1 = forms.CharField(
         label='Пароль',
-        widget=forms.PasswordInput(attrs={
-            'class': 'Input',
-            'placeholder': '••••••••',
-            'required': True,
-        })
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': '••••••••',
+                'required': True,
+            }
+        ),
     )
     password2 = forms.CharField(
         label='Подтверждение пароля',
-        widget=forms.PasswordInput(attrs={
-            'class': 'Input',
-            'placeholder': '••••••••',
-            'required': True,
-        })
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': '••••••••',
+                'required': True,
+            }
+        ),
     )
 
     class Meta:
@@ -141,9 +151,7 @@ class CustomPasswordResetForm(PasswordResetForm):
 
     def get_users(self, email: str) -> Any:
         email_field_name = User.get_email_field_name()
-        return User._default_manager.filter(
-            **{f'{email_field_name}__iexact': email}
-        )
+        return User._default_manager.filter(**{f'{email_field_name}__iexact': email})
 
 
 class ProfileUpdateForm(forms.ModelForm):
@@ -153,21 +161,25 @@ class ProfileUpdateForm(forms.ModelForm):
         label='Номер телефона',
         required=False,
         validators=[phone_validator],
-        widget=forms.TextInput(attrs={
-            'class': 'Input',
-            'placeholder': '+7 (999) 000-00-00',
-            'id': 'id_phone',
-        })
+        widget=forms.TextInput(
+            attrs={
+                'class': 'Input',
+                'placeholder': '+7 (999) 000-00-00',
+                'id': 'id_phone',
+            }
+        ),
     )
     default_shipping_address = forms.CharField(
         label='Адрес доставки по умолчанию',
         required=False,
-        widget=forms.Textarea(attrs={
-            'class': 'Textarea',
-            'placeholder': 'Город, улица, дом, квартира / офис',
-            'rows': 3,
-            'id': 'id_shipping_address',
-        })
+        widget=forms.Textarea(
+            attrs={
+                'class': 'Textarea',
+                'placeholder': 'Город, улица, дом, квартира / офис',
+                'rows': 3,
+                'id': 'id_shipping_address',
+            }
+        ),
     )
 
     class Meta:

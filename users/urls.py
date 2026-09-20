@@ -14,7 +14,6 @@ urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
     path('account/', views.AccountView.as_view(), name='account'),
     path('account/delete/', views.DeleteAccountView.as_view(), name='delete_account'),
-
     # Восстановление пароля и реактивация профиля
     path(
         'password-reset/',

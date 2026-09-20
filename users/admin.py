@@ -4,7 +4,6 @@
 Реализует требования раздела 3.6 ТЗ («Управление пользователями»).
 """
 
-from collections.abc import Sequence
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model

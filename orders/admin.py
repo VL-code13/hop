@@ -5,7 +5,6 @@
 аннотации, кастомные actions, фильтры»).
 """
 
-from collections.abc import Sequence
 from decimal import Decimal
 
 from django.contrib import admin
@@ -99,7 +98,7 @@ class OrderAdmin(admin.ModelAdmin):
             msg += f' Пропущено (не в статусе «Оплачен»): {skipped}.'
         self.message_user(request, msg)
 
-    @admin.action(description="Показать выручку по выбранным заказам")
+    @admin.action(description='Показать выручку по выбранным заказам')
     def show_revenue(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
         """
         Считает суммарную выручку по выбранным заказам с разбивкой по статусам.
@@ -133,8 +132,6 @@ class OrderAdmin(admin.ModelAdmin):
                 lines.append(f'  • {status_label}: {count} заказов, {subtotal} ₽')
 
         if unpaid_orders.exists():
-            lines.append(
-                f'Исключено (PENDING/CANCELLED): {unpaid_orders.count()} заказов.'
-            )
+            lines.append(f'Исключено (PENDING/CANCELLED): {unpaid_orders.count()} заказов.')
 
         self.message_user(request, '\n'.join(lines))

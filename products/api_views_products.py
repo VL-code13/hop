@@ -3,11 +3,11 @@
 
 Реализует требования раздела 3.7 ТЗ (/api/products/ и /api/products/<id>/).
 """
+
 from typing import Any
 
 from django.db.models import Avg, QuerySet
 from django_filters.rest_framework import DjangoFilterBackend  # type: ignore[import-untyped]
-
 from rest_framework import filters, viewsets
 from rest_framework.permissions import AllowAny
 

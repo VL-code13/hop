@@ -4,7 +4,6 @@
 Реализует требования раздела 3.6 ТЗ («Управление отзывами, фильтры, поиск»).
 """
 
-from collections.abc import Sequence
 
 from django.contrib import admin
 

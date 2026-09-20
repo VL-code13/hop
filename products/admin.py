@@ -5,7 +5,6 @@
 категориями, аннотации, фильтры, кастомные actions»).
 """
 
-from collections.abc import Sequence
 
 from django.contrib import admin
 from django.db.models import Count, QuerySet

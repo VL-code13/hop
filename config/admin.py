@@ -6,12 +6,10 @@
 """
 
 from decimal import Decimal
-from typing import Any
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
-from django.http import HttpRequest, HttpResponse
 
 from orders.models import Order
 from products.models import Product
@@ -54,20 +52,20 @@ class HopBarleyAdminSite(admin.AdminSite):
 
         # 5. Последние 5 заказов для быстрой модерации
         recent_orders = (
-            Order.objects.select_related('user')
-            .prefetch_related('items__product')
-            .order_by('-created_at')[:5]
+            Order.objects.select_related('user').prefetch_related('items__product').order_by('-created_at')[:5]
         )
 
         # Передаем агрегаты в контекст шаблона admin/index.html
-        extra_context.update({
-            'total_sales': total_sales,
-            'total_orders_count': total_orders_count,
-            'pending_orders_count': pending_orders_count,
-            'total_users_count': total_users_count,
-            'total_products_count': total_products_count,
-            'low_stock_products': low_stock_products,
-            'recent_orders': recent_orders,
-        })
+        extra_context.update(
+            {
+                'total_sales': total_sales,
+                'total_orders_count': total_orders_count,
+                'pending_orders_count': pending_orders_count,
+                'total_users_count': total_users_count,
+                'total_products_count': total_products_count,
+                'low_stock_products': low_stock_products,
+                'recent_orders': recent_orders,
+            }
+        )
 
         return super().index(request, extra_context=extra_context)

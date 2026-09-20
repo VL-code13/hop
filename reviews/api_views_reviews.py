@@ -66,8 +66,8 @@ class ProductReviewsAPIView(generics.ListCreateAPIView):
         product_id = self.kwargs.get('product_id')
         return (
             Review.objects.filter(product_id=product_id)
-            .select_related('user')          # Предзагрузка User — избегаем N+1
-            .order_by('-created_at')         # Новые отзывы первыми
+            .select_related('user')  # Предзагрузка User — избегаем N+1
+            .order_by('-created_at')  # Новые отзывы первыми
         )
 
     def perform_create(self, serializer: Any) -> None:
@@ -102,9 +102,7 @@ class ProductReviewsAPIView(generics.ListCreateAPIView):
 
         if not has_purchased:
             # PermissionDenied → DRF вернёт 403 с сообщением в JSON.
-            raise PermissionDenied(
-                'Оставить отзыв можно только на товар, который вы приобрели и оплатили.'
-            )
+            raise PermissionDenied('Оставить отзыв можно только на товар, который вы приобрели и оплатили.')
 
         # --- Проверка 2: повторный отзыв ---
         # UniqueConstraint в модели не даст сохранить дубль, но здесь

@@ -23,7 +23,7 @@ from .models import Review
 
 
 @login_required  # Только авторизованный пользователь может оставить отзыв
-@require_POST    # Разрешаем только POST — отзыв создаётся, но не читается этим эндпоинтом
+@require_POST  # Разрешаем только POST — отзыв создаётся, но не читается этим эндпоинтом
 def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     """
     Добавляет отзыв на товар через веб-форму.
@@ -50,7 +50,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     # Заказы в статусе PENDING (корзина/ожидание оплаты) не дают права на отзыв.
     has_purchased: bool = Order.objects.filter(
         user=user,
-        items__product=product,                          # JOIN через OrderItem
+        items__product=product,  # JOIN через OrderItem
         status__in=[Order.Status.PAID, Order.Status.DELIVERED],
     ).exists()
 
@@ -58,7 +58,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
         # Покупки нет — показываем ошибку и возвращаем на страницу товара.
         messages.error(
             request,
-            "Оставить отзыв можно только на товар, который вы уже приобрели и оплатили.",
+            'Оставить отзыв можно только на товар, который вы уже приобрели и оплатили.',
         )
         return redirect(product.get_absolute_url())
 
@@ -66,7 +66,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     # UniqueConstraint в модели Review не даёт создать второй отзыв на уровне БД,
     # но мы проверяем здесь, чтобы вернуть понятное сообщение, а не 500-ю ошибку.
     if Review.objects.filter(product=product, user=user).exists():
-        messages.warning(request, "Вы уже оставляли отзыв на данный товар.")
+        messages.warning(request, 'Вы уже оставляли отзыв на данный товар.')
         return redirect(product.get_absolute_url())
 
     # --- Сохранение отзыва ---
@@ -79,10 +79,10 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
         review.product = product
         review.user = user
         review.save()
-        messages.success(request, "Спасибо! Ваш отзыв успешно опубликован.")
+        messages.success(request, 'Спасибо! Ваш отзыв успешно опубликован.')
     else:
         # Форма невалидна — рейтинг вне диапазона или пустой комментарий.
-        messages.error(request, "Пожалуйста, проверьте правильность заполнения формы.")
+        messages.error(request, 'Пожалуйста, проверьте правильность заполнения формы.')
 
     # Возвращаем на страницу товара — там отображается список отзывов.
     return redirect(product.get_absolute_url())

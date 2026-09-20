@@ -22,11 +22,7 @@ class PaymentService:
 
         При успехе переводит транзакцию в SUCCESS, а заказ в Order.Status.PAID.
         """
-        tx_status = (
-            PaymentTransaction.Status.SUCCESS
-            if simulate_success
-            else PaymentTransaction.Status.FAILED
-        )
+        tx_status = PaymentTransaction.Status.SUCCESS if simulate_success else PaymentTransaction.Status.FAILED
 
         payment = PaymentTransaction.objects.create(
             order=order,

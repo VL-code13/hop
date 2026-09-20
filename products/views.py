@@ -1,5 +1,6 @@
 """Классы представлений (CBV) для витрины каталога и страниц товаров.
 Реализует требования разделов 3.1 («Каталог и поиск») и 3.2 («Страница товара») ТЗ."""
+
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -20,6 +21,7 @@ class ProductListView(ListView):
     - Фильтрацию по категории и диапазону цен (min_price, max_price);
     - Сортировку по новинкам, цене и популярности (рейтингу).
     """
+
     model = Product
     template_name: str = 'product_list.html'
     context_object_name: str = 'products'
@@ -44,9 +46,7 @@ class ProductListView(ListView):
 
         search_query: str = self.request.GET.get('q', '').strip()
         if search_query:
-            queryset = queryset.filter(
-                Q(name__icontains=search_query) | Q(description__icontains=search_query)
-            )
+            queryset = queryset.filter(Q(name__icontains=search_query) | Q(description__icontains=search_query))
 
         min_price: str | None = self.request.GET.get('min_price')
         max_price: str | None = self.request.GET.get('max_price')
@@ -71,13 +71,8 @@ class ProductListView(ListView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context: dict[str, Any] = super().get_context_data(**kwargs)
-        context['categories'] = (
-            Category.objects.filter(parent__isnull=True)
-            .prefetch_related('children')
-        )
-        context['current_category'] = (
-                self.kwargs.get('category_slug') or self.request.GET.get('category', '')
-        )
+        context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+        context['current_category'] = self.kwargs.get('category_slug') or self.request.GET.get('category', '')
         context['current_sort'] = self.request.GET.get('sort', 'newest')
         context['search_query'] = self.request.GET.get('q', '')
         context['min_price'] = self.request.GET.get('min_price', '')
@@ -121,6 +116,7 @@ class ProductDetailView(DetailView):
         context['reviews'] = product.reviews.all().order_by('-created_at')
 
         from reviews.forms import ReviewForm
+
         context['review_form'] = ReviewForm()
 
         can_review = False
@@ -130,7 +126,8 @@ class ProductDetailView(DetailView):
             from reviews.models import Review
 
             has_existing_review = Review.objects.filter(
-                product=product, user=self.request.user,
+                product=product,
+                user=self.request.user,
             ).exists()
             if not has_existing_review:
                 can_review = Order.objects.filter(

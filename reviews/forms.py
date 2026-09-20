@@ -14,7 +14,7 @@ class ReviewForm(forms.ModelForm):
         fields = ('rating', 'comment')
         widgets = {
             'rating': forms.Select(
-                choices=[(i, f"{i} зв.") for i in range(5, 0, -1)],
+                choices=[(i, f'{i} зв.') for i in range(5, 0, -1)],
                 attrs={'class': 'search-input', 'style': 'width: 120px;'},
             ),
             'comment': forms.Textarea(

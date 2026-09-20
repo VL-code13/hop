@@ -21,6 +21,7 @@ User = get_user_model()
 
 # ──────────────────────── Пользователи ────────────────────────
 
+
 @pytest.fixture
 def user_factory(db):
     """Фабрика пользователей. Возвращает функцию-создатель."""
@@ -35,6 +36,7 @@ def user_factory(db):
         }
         defaults.update(kwargs)
         return User.objects.create_user(**defaults)
+
     return make
 
 
@@ -77,6 +79,7 @@ def request_with_user(request_factory, user):
 
 # ──────────────────────── Каталог ────────────────────────
 
+
 @pytest.fixture
 def category_factory(db):
     """Фабрика категорий."""
@@ -90,6 +93,7 @@ def category_factory(db):
         }
         defaults.update(kwargs)
         return Category.objects.create(**defaults)
+
     return make
 
 
@@ -123,6 +127,7 @@ def product_factory(db, category):
         }
         defaults.update(kwargs)
         return Product.objects.create(**defaults)
+
     return make
 
 
@@ -146,6 +151,7 @@ def inactive_product(db, product_factory):
 
 # ──────────────────────── Корзина ────────────────────────
 
+
 @pytest.fixture
 def cart(request_with_user):
     """Сессионная корзина, привязанная к запросу с пользователем."""
@@ -160,6 +166,7 @@ def cart_with_product(cart, product):
 
 
 # ──────────────────────── Заказы ────────────────────────
+
 
 @pytest.fixture
 def order_factory(db, user, product_factory):
@@ -190,6 +197,7 @@ def order_factory(db, user, product_factory):
         order.total_price = order.get_total_cost()
         order.save(update_fields=['total_price'])
         return order
+
     return make
 
 
@@ -212,6 +220,7 @@ def delivered_order(db, order_factory):
 
 
 # ──────────────────────── Отзывы ────────────────────────
+
 
 @pytest.fixture
 def review_factory(db, paid_order):
@@ -238,6 +247,7 @@ def review_factory(db, paid_order):
         }
         defaults.update(kwargs)
         return Review.objects.create(**defaults)
+
     return make
 
 

@@ -32,5 +32,7 @@ class ProcessPaymentView(LoginRequiredMixin, View):
             simulate_success=True,
         )
 
-        messages.success(request, f'Заказ #{order.id} успешно оплачен! Теперь вы можете оставить отзыв на купленные товары.')
+        messages.success(
+            request, f'Заказ #{order.id} успешно оплачен! Теперь вы можете оставить отзыв на купленные товары.'
+        )
         return redirect('orders:order_success', order_id=order.id)

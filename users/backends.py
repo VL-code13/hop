@@ -38,9 +38,7 @@ class EmailOrUsernameModelBackend(ModelBackend):
         if not login_credential or not password:
             return None
 
-        user = User.objects.filter(
-            Q(email__iexact=login_credential) | Q(username__iexact=login_credential)
-        ).first()
+        user = User.objects.filter(Q(email__iexact=login_credential) | Q(username__iexact=login_credential)).first()
 
         if user and user.check_password(password) and self.user_can_authenticate(user):
             return user

@@ -17,14 +17,16 @@ class AddToCartProductForm(forms.Form):
     quantity = forms.IntegerField(
         min_value=1,
         initial=1,
-        widget=forms.NumberInput(attrs={
-            "class": "search-input",
-            "min": "1",
-            "step": "1",
-            "id": "id_quantity",
-            'style': 'width: 70px; padding: 8px; text-align: center;',
-        }),
-        label="Количество",
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'search-input',
+                'min': '1',
+                'step': '1',
+                'id': 'id_quantity',
+                'style': 'width: 70px; padding: 8px; text-align: center;',
+            }
+        ),
+        label='Количество',
     )
 
     def __init__(self, *args: Any, max_stock: int = 99, **kwargs: Any) -> None:
@@ -40,5 +42,5 @@ class AddToCartProductForm(forms.Form):
         """
         super().__init__(*args, **kwargs)
         if max_stock > 0:
-            self.fields["quantity"].widget.attrs["max"] = str(max_stock)
-            self.fields["quantity"].max_value = max_stock  # type: ignore[attr-defined]
+            self.fields['quantity'].widget.attrs['max'] = str(max_stock)
+            self.fields['quantity'].max_value = max_stock  # type: ignore[attr-defined]

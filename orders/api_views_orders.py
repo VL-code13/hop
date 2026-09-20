@@ -61,11 +61,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         Без prefetch каждый заказ делал бы отдельный запрос за позициями.
         """
         user: Any = self.request.user
-        return (
-            Order.objects.filter(user=user)
-            .prefetch_related('items__product')
-            .order_by('-created_at')
-        )
+        return Order.objects.filter(user=user).prefetch_related('items__product').order_by('-created_at')
 
     def get_serializer_class(self) -> Any:
         """
@@ -108,8 +104,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         for item in cart:
             if item['product'].stock < item['quantity']:
                 return Response(
-                    {'detail': f'Недостаточно товара «{item["product"].name}» '
-                               f'(остаток: {item["product"].stock}).'},
+                    {'detail': f'Недостаточно товара «{item["product"].name}» (остаток: {item["product"].stock}).'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -121,9 +116,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             order = Order.objects.create(
                 user=user,
                 shipping_address=serializer.validated_data['shipping_address'],
-                payment_method=serializer.validated_data.get(
-                    'payment_method', Order.PaymentMethod.CARD
-                ),
+                payment_method=serializer.validated_data.get('payment_method', Order.PaymentMethod.CARD),
                 total_price=cart.get_total_price(),
                 status=Order.Status.PENDING,
             )
@@ -133,7 +126,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 OrderItem.objects.create(
                     order=order,
                     product=item['product'],
-                    price=item['price'],           # Цена на момент заказа (фиксируется)
+                    price=item['price'],  # Цена на момент заказа (фиксируется)
                     quantity=item['quantity'],
                 )
                 # Уменьшаем остаток на складе.
@@ -200,17 +193,19 @@ class CartAPIView(APIView):
             {
                 'product_id': item['product'].id,
                 'product_name': item['product'].name,
-                'price': item['price'],           # Строковое Decimal (фиксируется при добавлении)
+                'price': item['price'],  # Строковое Decimal (фиксируется при добавлении)
                 'quantity': item['quantity'],
                 'total_price': item['total_price'],  # price * quantity (Decimal)
             }
             for item in cart
         ]
-        return Response({
-            'items': items,
-            'total_items': len(cart),
-            'total_price': cart.get_total_price(),
-        })
+        return Response(
+            {
+                'items': items,
+                'total_items': len(cart),
+                'total_price': cart.get_total_price(),
+            }
+        )
 
     @extend_schema(
         summary='Добавить товар в корзину',

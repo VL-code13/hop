@@ -114,10 +114,7 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         self.assertRedirects(response, reverse('users:account'))
 
         self.client.logout()
-        login_with_new_pass = self.client.login(
-            username='brewmaster',
-            password='BrandNewPassword2026!'
-        )
+        login_with_new_pass = self.client.login(username='brewmaster', password='BrandNewPassword2026!')
         self.assertTrue(login_with_new_pass)
 
 
