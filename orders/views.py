@@ -118,7 +118,6 @@ class OrderCreateView(LoginRequiredMixin, View):
         return render(request, 'checkout.html', {'cart': cart, 'form': form})
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        user: Any = request.user
         cart = Cart(request)
 
         if len(cart) == 0:

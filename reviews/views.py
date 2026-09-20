@@ -4,7 +4,6 @@
 Реализует требования раздела 3.2 ТЗ.
 """
 
-from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -27,7 +26,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     Вся валидация (проверка покупки, уникальность отзыва, лимиты рейтинга)
     делегирована в ReviewSerializer для соблюдения принципа DRY.
     """
-    product = get_object_or_404(Product, id=product_id, is_active=True)[cite: 88]
+    product = get_object_or_404(Product, id=product_id, is_active=True)
 
     # Передаем данные POST и контекст в ReviewSerializer
     serializer = ReviewSerializer(
@@ -38,7 +37,7 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
     try:
         if serializer.is_valid():
             serializer.save()
-            messages.success(request, 'Спасибо! Ваш отзыв успешно опубликован.')[cite: 88]
+            messages.success(request, 'Спасибо! Ваш отзыв успешно опубликован.')
         else:
             # Извлекаем ошибки валидации полей (например, rating)
             for err_list in serializer.errors.values():
@@ -51,4 +50,4 @@ def add_review(request: HttpRequest, product_id: int) -> HttpResponse:
         # Ошибка повторного отзыва (UniqueConstraint)
         messages.warning(request, str(e.detail[0] if isinstance(e.detail, list) else e.detail))
 
-    return redirect(product.get_absolute_url())[cite: 88]
+    return redirect(product.get_absolute_url())

@@ -54,7 +54,8 @@ class ProductReviewsAPIView(generics.ListCreateAPIView):
         """
         Передаёт в сериализатор HTTP-запрос и инстанс товара для выполнения валидации.
         """
-        context = super().get_serializer_context()
+        # Преобразуем Mapping в мутабельный dict для корректной типизации в mypy
+        context: dict[str, Any] = dict(super().get_serializer_context())
         if self.request.method == 'POST':
             context['product'] = self.get_product()
         return context

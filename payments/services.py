@@ -6,10 +6,12 @@
 """
 
 from typing import Any
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
 from orders.models import Order
+
 from .models import PaymentTransaction
 
 
@@ -45,8 +47,8 @@ class PaymentService:
         """
         try:
             order = Order.objects.get(id=order_id, user=user)
-        except Order.DoesNotExist:
-            raise ObjectDoesNotExist(f"Заказ #{order_id} не найден.")
+        except Order.DoesNotExist as err:
+            raise ObjectDoesNotExist(f"Заказ #{order_id} не найден.") from err
 
         if order.status == Order.Status.PAID:
             raise OrderAlreadyPaidError(f"Заказ #{order.id} уже оплачен.")

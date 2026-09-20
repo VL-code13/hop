@@ -1,10 +1,13 @@
 """Кастомный сайт панели администратора с аналитикой."""
 
 from decimal import Decimal
+from typing import Any
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest
+from django.template.response import TemplateResponse
 
 from orders.models import Order
 from products.models import Product
@@ -22,11 +25,12 @@ class HopBarleyAdminSite(admin.AdminSite):
     index_title = 'Аналитика и управление магазином'
     index_template = 'admin/index.html'
 
-    def index(self, request: HttpRequest, extra_context: dict | None = None) -> HttpResponse:
+    def index(
+        self, request: HttpRequest, extra_context: dict[str, Any] | None = None
+    ) -> TemplateResponse:
         """
         Переопределенный метод главной страницы админки с передачей метрик.
         """
-        # Инициализируем словарь, если передан None
         extra_context = extra_context or {}
 
         # 1. Суммарная выручка по оплаченным заказам
