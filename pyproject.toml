@@ -25,3 +25,9 @@ known-first-party = ["products", "orders", "reviews", "users", "hopbarley"]
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*.py" = ["F403", "F405"]
+"*/tests.py" = ["E402"]
+"*/tests/*.py" = ["E402"]
+

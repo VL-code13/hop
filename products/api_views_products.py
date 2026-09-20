@@ -26,12 +26,6 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     создания и рейтингу.
     """
 
-    queryset: QuerySet[Product] = (
-        Product.objects.filter(is_active=True)
-        .select_related('category')
-        .annotate(avg_rating=Avg('reviews__rating'))
-        .order_by('-created_at')
-    )
     # lookup_field: str = 'slug' # если хзахотим по слагу вместо ИД
     permission_classes: list = [AllowAny]
     filter_backends: list = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -41,6 +35,15 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     }
     search_fields: list[str] = ['name', 'description']
     ordering_fields: list[str] = ['price', 'created_at', 'avg_rating', 'name']
+    ordering = ['-created_at']
+
+    def get_queryset(self) -> QuerySet[Product]:
+        return (
+            Product.objects.filter(is_active=True)
+            .select_related('category')
+            .annotate(avg_rating=Avg('review__rating'))
+            .order_by('-created_at')
+        )
 
     def get_serializer_class(self) -> Any:
         """Динамический выбор сериализатора: облегченный для списка, полный для детали."""

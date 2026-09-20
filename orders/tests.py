@@ -1,15 +1,12 @@
-from django.test import TestCase
-
-# Create your tests here.
 """
 Модульные тесты приложения orders.
 
 Реализует требования разделов 6.3 («Тестирование: корзина, заказ, бизнес-правила») и 8 ТЗ.
 """
-
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 from django.urls import reverse
 
 from products.models import Category, Product

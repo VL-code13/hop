@@ -5,44 +5,22 @@
 и документирование схем OpenAPI по разделу 3.8 ТЗ.
 """
 
-from typing import Any
-
 from django.db import transaction
-from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import generics, serializers, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from products.models import Product
-
 from .cart import Cart
 from .models import Order, OrderItem
 from .serializers import (
     CartItemSerializer,
+    CartResponseSerializer,
     OrderCreateSerializer,
     OrderSerializer,
 )
-
-
-class CartItemResponseSerializer(serializers.Serializer):
-    """Схема элемента корзины для Swagger-документации."""
-
-    product_id = serializers.IntegerField()
-    product_name = serializers.CharField()
-    price = serializers.DecimalField(max_digits=10, decimal_places=2)
-    quantity = serializers.IntegerField()
-    total_price = serializers.DecimalField(max_digits=10, decimal_places=2)
-
-
-class CartResponseSerializer(serializers.Serializer):
-    """Схема ответа корзины для Swagger-документации."""
-
-    items = CartItemResponseSerializer(many=True)
-    total_items = serializers.IntegerField()
-    total_price = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -57,7 +35,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
-    def get_queryset(self) -> Any:
+    def get_queryset(self):
         """Возвращает только заказы текущего авторизованного пользователя."""
         return (
             Order.objects.filter(user=self.request.user)
@@ -65,14 +43,14 @@ class OrderViewSet(viewsets.ModelViewSet):
             .order_by('-created_at')
         )
 
-    def get_serializer_class(self) -> Any:
+    def get_serializer_class(self):
         """Выбирает сериализатор в зависимости от выполняемого действия."""
         if self.action == 'create':
             return OrderCreateSerializer
         return OrderSerializer
 
-    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Создает заказ из сессионной корзины пользователя с валидацией остатков."""
+    def create(self, request: Request) -> Response:
+        """Создаёт заказ из сессионной корзины пользователя с валидацией остатков."""
         cart = Cart(request)
         if len(cart) == 0:
             return Response(
@@ -83,19 +61,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = OrderCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        with transaction.atomic():
-            for item in cart:
-                prod: Product = item['product']
-                if prod.stock < item['quantity']:
-                    return Response(
-                        {'detail': f'Недостаточно товара «{prod.name}» (остаток: {prod.stock}).'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+        # Проверка остатков ДО транзакции — чтобы не откатывать atomic впустую
+        for item in cart:
+            if item['product'].stock < item['quantity']:
+                return Response(
+                    {'detail': f'Недостаточно товара «{item["product"].name}» '
+                               f'(остаток: {item["product"].stock}).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
+        with transaction.atomic():
             order = Order.objects.create(
                 user=request.user,
-                shipping_address=serializer.validated_data.get('shipping_address', ''),
-                payment_method=serializer.validated_data.get('payment_method', Order.PaymentMethod.CARD),
+                shipping_address=serializer.validated_data['shipping_address'],
+                payment_method=serializer.validated_data.get(
+                    'payment_method', Order.PaymentMethod.CARD
+                ),
                 total_price=cart.get_total_price(),
                 status=Order.Status.PENDING,
             )
@@ -107,16 +88,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                     price=item['price'],
                     quantity=item['quantity'],
                 )
-                prod = item['product']
-                prod.stock -= item['quantity']
-                prod.save(update_fields=['stock'])
+                item['product'].stock -= item['quantity']
+                item['product'].save(update_fields=['stock'])
 
         cart.clear()
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
-    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """Отменяет заказ (переводит в статус CANCELLED), если он ещё не отправлен."""
-        order: Order = self.get_object()
+    def destroy(self, request: Request) -> Response:
+        """Отменяет заказ (переводит в CANCELLED), если он ещё не отправлен."""
+        order = self.get_object()
         if order.status in [Order.Status.SHIPPED, Order.Status.DELIVERED]:
             return Response(
                 {'detail': 'Нельзя отменить заказ, который уже отправлен или доставлен.'},
@@ -124,7 +104,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
         order.status = Order.Status.CANCELLED
         order.save(update_fields=['status'])
-        return Response({'detail': f'Заказ #{order.id} успешно отменен.'})
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CartAPIView(APIView):
@@ -138,7 +118,7 @@ class CartAPIView(APIView):
     - DELETE: очистка корзины.
     """
 
-    schema = AutoSchema()
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary='Получить содержимое корзины',
@@ -176,13 +156,12 @@ class CartAPIView(APIView):
         """Добавляет товар в корзину через API."""
         serializer = CartItemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        product_id = serializer.validated_data['product_id']
+        product = serializer.validated_data['product']
         quantity = serializer.validated_data['quantity']
 
-        product = generics.get_object_or_404(Product, id=product_id, is_active=True)
         cart = Cart(request)
 
-        already_in_cart = cart.cart.get(str(product_id), {}).get('quantity', 0)
+        already_in_cart = cart.cart.get(str(product.id), {}).get('quantity', 0)
         if already_in_cart + quantity > product.stock:
             return Response(
                 {'detail': f'Недостаточно товара на складе (в наличии: {product.stock}).'},
@@ -190,11 +169,14 @@ class CartAPIView(APIView):
             )
 
         cart.add(product=product, quantity=quantity, override_quantity=False)
-        return Response({'detail': f'Товар «{product.name}» добавлен в корзину.'}, status=status.HTTP_200_OK)
+        return Response(
+            {'detail': f'Товар «{product.name}» добавлен в корзину.'},
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary='Обновить количество товара в корзине',
-        description='Перезаписывает точное количество для указанного товара (метод PATCH по разделу 3.7 ТЗ).',
+        description='Перезаписывает точное количество для указанного товара (PATCH по разделу 3.7 ТЗ).',
         request=CartItemSerializer,
         responses={
             200: OpenApiResponse(description='Количество товара обновлено'),
@@ -205,10 +187,9 @@ class CartAPIView(APIView):
         """Перезаписывает точное количество единиц товара в корзине."""
         serializer = CartItemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        product_id = serializer.validated_data['product_id']
+        product = serializer.validated_data['product']
         quantity = serializer.validated_data['quantity']
 
-        product = generics.get_object_or_404(Product, id=product_id, is_active=True)
         cart = Cart(request)
 
         if quantity > product.stock:
@@ -218,7 +199,10 @@ class CartAPIView(APIView):
             )
 
         cart.add(product=product, quantity=quantity, override_quantity=True)
-        return Response({'detail': f'Количество для «{product.name}» обновлено.'}, status=status.HTTP_200_OK)
+        return Response(
+            {'detail': f'Количество для «{product.name}» обновлено.'},
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         summary='Очистить корзину',
@@ -228,4 +212,4 @@ class CartAPIView(APIView):
         """Полностью очищает корзину."""
         cart = Cart(request)
         cart.clear()
-        return Response({'detail': 'Корзина успешно очищена.'}, status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)

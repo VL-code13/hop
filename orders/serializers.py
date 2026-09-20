@@ -4,9 +4,9 @@
 Реализует требования раздела 3.7 ТЗ (/api/orders/ и /api/cart/).
 """
 
-from collections.abc import Sequence
-
 from rest_framework import serializers
+
+from products.models import Product
 
 from .models import Order, OrderItem
 
@@ -18,8 +18,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields: Sequence[str] = ('id', 'product', 'product_name', 'price', 'quantity')
-        read_only_fields: Sequence[str] = ('price',)
+        fields = ('id', 'product', 'product_name', 'price', 'quantity')
+        read_only_fields = ('price', 'product', 'quantity')
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -30,7 +30,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields: Sequence[str] = (
+        fields = (
             'id',
             'user',
             'status',
@@ -40,7 +40,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'created_at',
             'items',
         )
-        read_only_fields: Sequence[str] = ('total_price', 'created_at', 'status')
+        read_only_fields = ('total_price', 'created_at', 'status')
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
@@ -48,11 +48,38 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields: Sequence[str] = ('shipping_address', 'payment_method')
+        fields = ('shipping_address', 'payment_method')
 
 
 class CartItemSerializer(serializers.Serializer):
-    """Сериализатор отдельной позиции корзины в API."""
+    """
+    Сериализатор входных данных для добавления/обновления позиции корзины.
+
+    product_id валидируется через PrimaryKeyRelatedField: DRF сам вернёт
+    404 на несуществующий или скрытый (is_active=False) товар — ручной
+    get_object_or_404 в представлении не нужен.
+    """
+
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.filter(is_active=True),
+        source='product',
+    )
+    quantity = serializers.IntegerField(min_value=1, max_value=99, default=1)
+
+
+class CartItemResponseSerializer(serializers.Serializer):
+    """Схема элемента корзины для ответа API и Swagger-документации."""
 
     product_id = serializers.IntegerField()
-    quantity = serializers.IntegerField(min_value=1, default=1)
+    product_name = serializers.CharField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    quantity = serializers.IntegerField()
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+class CartResponseSerializer(serializers.Serializer):
+    """Схема ответа корзины для API и Swagger-документации."""
+
+    items = CartItemResponseSerializer(many=True)
+    total_items = serializers.IntegerField()
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2)

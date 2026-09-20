@@ -6,7 +6,6 @@
 
 from typing import Any
 
-from drf_spectacular.openapi import AutoSchema
 from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -24,7 +23,7 @@ class ProductReviewsAPIView(generics.ListCreateAPIView):
     GET: доступен всем (список отзывов конкретного товара).
     POST: доступен только авторизованным (JWT), купившим данный товар.
     """
-    schema = AutoSchema()
+
     serializer_class = ReviewSerializer
 
     def get_permissions(self) -> list[Any]:

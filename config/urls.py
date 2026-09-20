@@ -16,9 +16,9 @@ from rest_framework_simplejwt.views import (
 )
 
 from config.admin import HopBarleyAdminSite
-from orders.api_views import CartAPIView, OrderViewSet
-from products.api_views import ProductViewSet
-from reviews.api_views import ProductReviewsAPIView
+from orders.api_views_orders import CartAPIView, OrderViewSet
+from products.api_views_products import ProductViewSet
+from reviews.api_views_reviews import ProductReviewsAPIView
 
 # Заменяем стандартный admin.site на наш расширенный
 custom_admin_site = HopBarleyAdminSite(name='custom_admin')
