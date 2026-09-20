@@ -5,6 +5,7 @@
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -123,10 +124,15 @@ STORAGES = {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
     'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if ('test' in sys.argv or 'pytest' in sys.modules)
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
     },
 }
-
+# Также можно отключить строгость поиска по манифесту:
+WHITENOISE_MANIFEST_STRICT = False
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Конфигурация сессий (раздел 3.3 ТЗ: корзина в сессиях)
