@@ -4,8 +4,10 @@
 Реализует требования раздела 3.6 ТЗ («Управление отзывами, фильтры, поиск»).
 """
 
-from typing import Sequence
+from collections.abc import Sequence
+
 from django.contrib import admin
+
 from .models import Review
 
 

@@ -1,6 +1,7 @@
 """Формы пользовательского интерфейса для работы с товарами."""
 
 from typing import Any
+
 from django import forms
 
 

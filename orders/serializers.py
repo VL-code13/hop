@@ -4,8 +4,10 @@
 Реализует требования раздела 3.7 ТЗ (/api/orders/ и /api/cart/).
 """
 
-from typing import Sequence
+from collections.abc import Sequence
+
 from rest_framework import serializers
+
 from .models import Order, OrderItem
 
 

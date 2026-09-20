@@ -1,7 +1,9 @@
 """Сервисная логика эмуляции оплаты заказа."""
 
 from django.db import transaction
+
 from orders.models import Order
+
 from .models import PaymentTransaction
 
 

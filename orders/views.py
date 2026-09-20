@@ -6,6 +6,7 @@
 
 from decimal import Decimal
 from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -15,6 +16,7 @@ from django.urls import reverse_lazy
 from django.views.generic import View
 
 from products.models import Product
+
 from .cart import Cart
 from .forms import OrderCreateForm
 from .models import Order, OrderItem

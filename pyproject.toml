@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes (unused imports, variables)
+    "I",     # isort (импорты)
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "SIM",   # flake8-simplify
+    "C4",    # flake8-comprehensions
+]
+ignore = [
+    "E501",  # длина строки — ruff format справится
+    "B008",  # Function call in default argument (Django: default=Decimal('0.00'))
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["products", "orders", "reviews", "users", "hopbarley"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"

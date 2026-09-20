@@ -4,6 +4,7 @@
 """
 
 from typing import Any
+
 from django.conf import settings
 from django.db.models import Model
 from django.db.models.signals import post_save

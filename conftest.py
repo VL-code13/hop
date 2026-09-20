@@ -5,14 +5,15 @@
 Все фабрики создают минимально валидные объекты.
 """
 
+from decimal import Decimal
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
-from decimal import Decimal
 
-from products.models import Category, Product
-from orders.models import Order, OrderItem
 from orders.cart import Cart
+from orders.models import Order, OrderItem
+from products.models import Category, Product
 from reviews.models import Review
 
 User = get_user_model()

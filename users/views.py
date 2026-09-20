@@ -5,6 +5,7 @@
 """
 
 from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -19,6 +20,7 @@ from django.urls import reverse_lazy
 from django.views.generic import FormView, View
 
 from orders.models import Order
+
 from .forms import (
     PasswordChangeCustomForm,
     ProfileUpdateForm,

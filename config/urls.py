@@ -15,10 +15,10 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+from config.admin import HopBarleyAdminSite
 from orders.api_views import CartAPIView, OrderViewSet
 from products.api_views import ProductViewSet
 from reviews.api_views import ProductReviewsAPIView
-from config.admin import HopBarleyAdminSite
 
 # Заменяем стандартный admin.site на наш расширенный
 custom_admin_site = HopBarleyAdminSite(name='custom_admin')

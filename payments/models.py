@@ -1,7 +1,9 @@
 """Модели платежей и транзакций интернет-магазина."""
 
 import uuid
+
 from django.db import models
+
 from orders.models import Order
 
 

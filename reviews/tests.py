@@ -9,6 +9,7 @@
 """
 
 from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -20,6 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from orders.models import Order, OrderItem
 from products.models import Category, Product
+
 from .models import Review
 
 User = get_user_model()

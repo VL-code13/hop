@@ -6,10 +6,13 @@
 """
 
 import copy
+from collections.abc import Generator
 from decimal import Decimal
-from typing import Any, Generator
+from typing import Any
+
 from django.conf import settings
 from django.http import HttpRequest
+
 from products.models import Product
 
 CART_SESSION_ID: str = getattr(settings, 'CART_SESSION_ID', 'cart')

@@ -1,12 +1,13 @@
 """Классы представлений (CBV) для витрины каталога и страниц товаров.
 Реализует требования разделов 3.1 («Каталог и поиск») и 3.2 («Страница товара») ТЗ."""
 from decimal import Decimal, InvalidOperation
-from typing import Any, Optional
-from django.db.models import QuerySet, Q, Avg
-from django.views.generic import ListView, DetailView, TemplateView
+from typing import Any
+
+from django.db.models import Avg, Q, QuerySet
+from django.views.generic import DetailView, ListView, TemplateView
 
 from products.forms import AddToCartProductForm
-from products.models import Product, Category
+from products.models import Category, Product
 
 
 class ProductListView(ListView):
@@ -37,7 +38,7 @@ class ProductListView(ListView):
             .annotate(avg_rating=Avg('reviews__rating'))
         )
 
-        category_slug: Optional[str] = self.kwargs.get('category_slug') or self.request.GET.get('category')
+        category_slug: str | None = self.kwargs.get('category_slug') or self.request.GET.get('category')
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
 
@@ -47,8 +48,8 @@ class ProductListView(ListView):
                 Q(name__icontains=search_query) | Q(description__icontains=search_query)
             )
 
-        min_price: Optional[str] = self.request.GET.get('min_price')
-        max_price: Optional[str] = self.request.GET.get('max_price')
+        min_price: str | None = self.request.GET.get('min_price')
+        max_price: str | None = self.request.GET.get('max_price')
         try:
             if min_price:
                 queryset = queryset.filter(price__gte=Decimal(min_price))
@@ -125,8 +126,8 @@ class ProductDetailView(DetailView):
         can_review = False
         has_existing_review = False
         if self.request.user.is_authenticated:
-            from reviews.models import Review
             from orders.models import Order
+            from reviews.models import Review
 
             has_existing_review = Review.objects.filter(
                 product=product, user=self.request.user,

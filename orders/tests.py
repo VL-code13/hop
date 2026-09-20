@@ -8,10 +8,12 @@ from django.test import TestCase
 """
 
 from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from products.models import Category, Product
+
 from .models import Order
 
 User = get_user_model()

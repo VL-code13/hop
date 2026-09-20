@@ -4,14 +4,14 @@
 Реализует требования раздела 3.7 ТЗ (/api/products/ и /api/products/<id>/).
 """
 from typing import Any
+
 from django.db.models import Avg, QuerySet
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.permissions import AllowAny
-from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Product
 from .serializers import ProductDetailSerializer, ProductListSerializer
-
 
 # Лучшие практики: Разделение спискового и детального сериализаторов (get_serializer_class) позволяет не
 # отдавать тяжелое текстовое описание в общем листинге товаров, экономя сетевой трафик.

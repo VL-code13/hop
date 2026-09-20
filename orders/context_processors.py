@@ -1,6 +1,7 @@
 """Контекстные процессоры приложения заказов."""
 
 from django.http import HttpRequest
+
 from .cart import Cart
 
 

@@ -6,9 +6,10 @@ from django.test import TestCase
 
 Реализует требования разделов 6.3 («Тестирование: каталог, поиск, бизнес-правила») и 8 ТЗ.
 """
-
 from decimal import Decimal
+
 from django.urls import reverse
+
 from products.models import Category, Product
 
 

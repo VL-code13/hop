@@ -1,8 +1,10 @@
 """Модульные тесты приложения оплаты."""
 
 from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+
 from orders.models import Order
 from payments.models import PaymentTransaction
 from payments.services import PaymentService

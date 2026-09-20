@@ -1,12 +1,15 @@
 """Контроллеры оплаты заказа."""
 
 from typing import Any
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import View
+
 from orders.models import Order
+
 from .services import PaymentService
 
 

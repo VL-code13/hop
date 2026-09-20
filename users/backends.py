@@ -5,7 +5,8 @@
 - Администраторы могут входить в /admin/ по системному имени (Username).
 """
 
-from typing import Any, Optional
+from typing import Any
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.models import AbstractBaseUser
@@ -23,16 +24,16 @@ class EmailOrUsernameModelBackend(ModelBackend):
 
     def authenticate(
         self,
-        request: Optional[HttpRequest],
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        request: HttpRequest | None,
+        username: str | None = None,
+        password: str | None = None,
         **kwargs: Any,
-    ) -> Optional[AbstractBaseUser]:
+    ) -> AbstractBaseUser | None:
         """
         Поиск пользователя по email или username без учета регистра.
         Проверяет пароль и флаг активности (is_active=True).
         """
-        login_credential: Optional[str] = username or kwargs.get('email')
+        login_credential: str | None = username or kwargs.get('email')
 
         if not login_credential or not password:
             return None

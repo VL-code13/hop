@@ -6,7 +6,8 @@
 """
 
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
@@ -26,7 +27,7 @@ class HopBarleyAdminSite(admin.AdminSite):
     index_title = 'Аналитический дашборд и управление'
     index_template = 'admin/index.html'
 
-    def index(self, request: HttpRequest, extra_context: Optional[dict[str, Any]] = None) -> HttpResponse:
+    def index(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
         """
         Формирует контекст аналитического дашборда на главной странице админки.
 

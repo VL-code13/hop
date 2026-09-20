@@ -4,8 +4,10 @@
 Реализует требования раздела 3.7 ТЗ (/api/products/ и /api/products/<id>/).
 """
 
-from typing import Sequence
+from collections.abc import Sequence
+
 from rest_framework import serializers
+
 from .models import Category, Product
 
 

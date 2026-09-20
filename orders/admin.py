@@ -5,8 +5,9 @@
 аннотации, кастомные actions, фильтры»).
 """
 
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import Sequence
+
 from django.contrib import admin
 from django.db.models import Count, QuerySet, Sum
 from django.http import HttpRequest
