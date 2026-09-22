@@ -8,8 +8,9 @@ omit =
     */asgi.py
     manage.py
     config/settings/*
-    .venv/*
-    venv/*
+    conftest.py
+    */urls.py
+    */admin.py
 
 [report]
 exclude_lines =
@@ -18,3 +19,7 @@ exclude_lines =
     raise NotImplementedError
     if __name__ == .__main__.:
     class .*\bMeta\b:
+
+[html]
+directory = htmlcov
+title = Hop & Barley Coverage

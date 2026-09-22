@@ -6,9 +6,11 @@
 """
 
 from decimal import Decimal
+from itertools import count
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory
 
 from orders.cart import Cart
@@ -19,19 +21,39 @@ from reviews.models import Review
 User = get_user_model()
 
 
+# ──────────────────────── Инфраструктура ────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _disable_ssl_redirect(settings):
+    """Отключает HTTPS-редирект для тестового клиента.
+
+    В config.settings.ci стоит SECURE_SSL_REDIRECT=True (проверка прод-конфига),
+    но тестовый клиент ходит по HTTP → SecurityMiddleware отдаёт 301.
+    Здесь отключаем только для тестов.
+    """
+    settings.SECURE_SSL_REDIRECT = False
+
+
+@pytest.fixture
+def request_factory():
+    """RequestFactory для имитации запросов без прогонки через middleware."""
+    return RequestFactory()
+
+
 # ──────────────────────── Пользователи ────────────────────────
 
 
 @pytest.fixture
 def user_factory(db):
     """Фабрика пользователей. Возвращает функцию-создатель."""
-    counter = [0]
+    counter = count(1)
 
     def make(**kwargs):
-        counter[0] += 1
+        idx = next(counter)
         defaults = {
-            'username': f'testuser_{counter[0]}',
-            'email': f'testusermail_{counter[0]}@domain.com',
+            'username': f'testuser_{idx}',
+            'email': f'testusermail_{idx}@domain.com',
             'password': 'testpass123',
         }
         defaults.update(kwargs)
@@ -64,15 +86,15 @@ def admin_user(db, user_factory):
 
 
 @pytest.fixture
-def request_factory():
-    """RequestFactory для имитации запросов."""
-    return RequestFactory()
-
-
-@pytest.fixture
 def request_with_user(request_factory, user):
-    """Запрос с прикреплённым авторизованным пользователем."""
+    """Запрос с сессией и авторизованным пользователем.
+
+    RequestFactory не прогоняет middleware, поэтому SessionMiddleware
+    вызываем вручную — иначе у request не будет .session, и Cart упадёт.
+    """
     request = request_factory.post('/')
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
     request.user = user
     return request
 
@@ -83,13 +105,13 @@ def request_with_user(request_factory, user):
 @pytest.fixture
 def category_factory(db):
     """Фабрика категорий."""
-    counter = [0]
+    counter = count(1)
 
     def make(**kwargs):
-        counter[0] += 1
+        idx = next(counter)
         defaults = {
-            'name': f'Категория {counter[0]}',
-            'slug': f'category-{counter[0]}',
+            'name': f'Категория {idx}',
+            'slug': f'category-{idx}',
         }
         defaults.update(kwargs)
         return Category.objects.create(**defaults)
@@ -110,18 +132,18 @@ def child_category(db, category_factory, category):
 
 
 @pytest.fixture
-def product_factory(db, category):
-    """Фабрика товаров. Категория по умолчанию — из фикстуры `category`."""
-    counter = [0]
+def product_factory(db, category_factory):
+    """Фабрика товаров. Категория создаётся лениво, если не передана явно."""
+    counter = count(1)
 
     def make(**kwargs):
-        counter[0] += 1
+        idx = next(counter)
         defaults = {
-            'name': f'Товар {counter[0]}',
-            'slug': f'product-{counter[0]}',
-            'description': f'Описание товара {counter[0]}',
+            'name': f'Товар {idx}',
+            'slug': f'product-{idx}',
+            'description': f'Описание товара {idx}',
             'price': Decimal('500.00'),
-            'category': category,
+            'category': category_factory(),
             'is_active': True,
             'stock': 10,
         }
@@ -171,10 +193,8 @@ def cart_with_product(cart, product):
 @pytest.fixture
 def order_factory(db, user, product_factory):
     """Фабрика заказов. Создаёт Order + OrderItem автоматически."""
-    counter = [0]
 
     def make(**kwargs):
-        counter[0] += 1
         prod = kwargs.pop('product', product_factory())
         quantity = kwargs.pop('quantity', 1)
         status = kwargs.pop('status', Order.Status.PENDING)
@@ -231,10 +251,10 @@ def review_factory(db, paid_order):
     и к пользователю этого заказа — так соблюдается бизнес-правило
     «отзыв только после покупки».
     """
-    counter = [0]
+    counter = count(1)
 
     def make(**kwargs):
-        counter[0] += 1
+        idx = next(counter)
         order = kwargs.pop('order', paid_order)
         product = kwargs.pop('product', order.items.first().product)
         review_user = kwargs.pop('user', order.user)
@@ -243,7 +263,7 @@ def review_factory(db, paid_order):
             'product': product,
             'user': review_user,
             'rating': 5,
-            'comment': f'Отличный товар {counter[0]}!',
+            'comment': f'Отличный товар {idx}!',
         }
         defaults.update(kwargs)
         return Review.objects.create(**defaults)

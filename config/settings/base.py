@@ -9,15 +9,31 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # BASE_DIR указывает на корень проекта (hop-and-barley/)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Надежная загрузка .env из корня проекта
+# 1. Сначала загружаем .env
 load_dotenv(BASE_DIR / '.env')
 
+
+# 2. Потом читаем любые env-переменные
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None or value == '':
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+DEBUG = env_bool('DJANGO_DEBUG', default=False)
+
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY не задан. Укажите его в .env или переменных окружения.'
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -146,8 +162,14 @@ LOGIN_REDIRECT_URL: str = 'products:product_list'
 LOGOUT_REDIRECT_URL: str = 'products:product_list'
 
 # Email-уведомления и почтовые службы (раздел 3.4 ТЗ)
-EMAIL_BACKEND: str = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL: str = 'Hop & Barley <noreply@hopandbarley.com>'
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL',
+    'Hop & Barley <noreply@hopandbarley.com>',
+)
 
 # Список администраторов (кортежи: имя, email)
 ADMINS = [

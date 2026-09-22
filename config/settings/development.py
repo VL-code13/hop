@@ -1,9 +1,12 @@
+import os
+
+os.environ.setdefault('DJANGO_SECRET_KEY', 'dev-insecure-key-do-not-use-in-prod')
+
 from .base import *
 
-DEBUG = True
-ALLOWED_HOSTS = ['*']
+DEBUG = env_bool('DJANGO_DEBUG', default=True)
+ALLOWED_HOSTS = ['*'] if DEBUG else os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')
 
-# Временная БД для локальной разработки
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',

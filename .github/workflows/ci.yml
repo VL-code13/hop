@@ -3,16 +3,24 @@ name: CI
 on:
   push:
     branches:
-      - main
       - dev_3st_week
   pull_request:
     branches:
-      - main
       - dev_3st_week
+
+# Отменяет предыдущий запуск при новом push в ту же ветку
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# GITHUB_TOKEN только на чтение — безопаснее дефолта
+permissions:
+  contents: read
 
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -30,16 +38,15 @@ jobs:
           --health-retries=5
 
     env:
-      DEBUG: "False"
-      SECRET_KEY: "ci-secret-key"
-      ALLOWED_HOSTS: "localhost,127.0.0.1"
-
+      DJANGO_SETTINGS_MODULE: config.settings.ci
+      DJANGO_SECRET_KEY: "ci-secret-key"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_DEBUG: "False"
       POSTGRES_DB: test_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
-
       EMAIL_BACKEND: "django.core.mail.backends.locmem.EmailBackend"
       DEFAULT_FROM_EMAIL: "noreply@hopbarley.ru"
 
@@ -58,13 +65,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ruff
-        run: |
-          ruff check .
-          ruff format --check .
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
 
       - name: Mypy
         run: mypy .
+
+      - name: Django system check
+        run: python manage.py check
 
       - name: Check migrations
         run: python manage.py makemigrations --check --dry-run --noinput
@@ -73,4 +84,4 @@ jobs:
         run: python manage.py migrate --noinput
 
       - name: Run tests
-        run: pytest
+        run: pytest --create-db --migrations --cov-fail-under=70

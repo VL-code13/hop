@@ -5,14 +5,14 @@ exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
 
 [tool.ruff.lint]
 select = [
-    "E", # pycodestyle errors
-    "W", # pycodestyle warnings
-    "F", # pyflakes (unused imports, variables)
-    "I", # isort (импорты)
-    "B", # flake8-bugbear
-    "UP", # pyupgrade
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (unused imports, variables)
+    "I",   # isort (импорты)
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
     "SIM", # flake8-simplify
-    "C4", # flake8-comprehensions
+    "C4",  # flake8-comprehensions
 ]
 ignore = [
     "E501", # длина строки — ruff format справится
@@ -20,14 +20,14 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["products", "orders", "reviews", "users", "hopbarley"]
+known-first-party = ["config", "products", "orders", "reviews", "users", "payments"]
 
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
 
 [tool.ruff.lint.per-file-ignores]
-"config/settings/*.py" = ["F403", "F405"]
+"config/settings/*.py" = ["E402", "F403", "F405"]
 "*/tests.py" = ["E402"]
 "*/tests/*.py" = ["E402"]
 
@@ -36,4 +36,3 @@ plugins = ["mypy_django_plugin.main"]
 
 [tool.django-stubs]
 django_settings_module = "config.settings.development"
-
