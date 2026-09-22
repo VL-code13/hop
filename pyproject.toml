@@ -1,23 +1,57 @@
+# ─── Сборка ───
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# ─── Poetry-настройки ───
+[tool.poetry]
+package-mode = false
+
+# ─── Метаданные проекта ───
+[project]
+name = "hop-and-barley"
+version = "0.1.0"
+description = "Интернет-магазин товаров для крафтового пивоварения"
+authors = [
+    {name = "VL-code13", email = "v79260574744@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django==6.1.1",
+    "djangorestframework==3.18.0",
+    "djangorestframework-simplejwt==5.5.1",
+    "drf-spectacular==0.30.0",
+    "django-filter==26.1",
+    "psycopg[binary]==3.3.5",
+    "python-dotenv==1.2.3",
+    "pillow==12.3.0",
+    "whitenoise==6.12.0",
+]
+
+# ─── Dev-зависимости ───
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-django==4.14.0",
+    "pytest-cov==7.1.0",
+    "coverage==7.16.1",
+    "ruff==0.16.8",
+    "mypy==1.13.0",
+    "django-stubs==6.1.1",
+    "djangorestframework-stubs==3.18.1",
+    "types-pyyaml==6.0.12.20260906",
+]
+
+# ─── Ruff ───
 [tool.ruff]
 target-version = "py312"
 line-length = 120
 exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes (unused imports, variables)
-    "I",   # isort (импорты)
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-    "SIM", # flake8-simplify
-    "C4",  # flake8-comprehensions
-]
-ignore = [
-    "E501", # длина строки — ruff format справится
-    "B008", # Function call in default argument (Django: default=Decimal('0.00'))
-]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4"]
+ignore = ["E501", "B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "products", "orders", "reviews", "users", "payments"]
@@ -31,6 +65,7 @@ indent-style = "space"
 "*/tests.py" = ["E402"]
 "*/tests/*.py" = ["E402"]
 
+# ─── Mypy ───
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
 
