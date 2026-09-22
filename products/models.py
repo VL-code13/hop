@@ -2,21 +2,54 @@
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.templatetags.static import static
 from django.urls import reverse
+
+# Соответствие ключевых слов в названии/slug товара → статичной картинке.
+# Порядок важен: специфичные ключи (chocolate, caramunich) должны идти
+# раньше общих (pale ale, pilsner), иначе сработает первое совпадение.
+# Регистр игнорируется (`haystack.lower()`).
+IMAGE_KEYWORD_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
+    # ── Солод ──────────────────────────────────────────────
+    (('chocolate', 'шоколад'),                   'img/products/caramel_malt.jpg'),
+    (('caramunich', 'карамельн'),                'img/products/caramel_malt.jpg'),
+    (('maris', 'otter', 'pale ale', 'pale-ale'), 'img/products/maris_otter_malt.jpg'),
+    (('pilsner', 'пилзнер', 'пилснер'),          'img/products/pilsner_malt.jpg'),
+    (('wheat', 'пшенич', 'unmalted'),            'img/products/unmalted_wheat.jpg'),
+    # ── Хмель ──────────────────────────────────────────────
+    (('citra', 'цитра'),                         'img/products/citra_hops.jpg'),
+    (('mosaic', 'мозаик'),                       'img/products/mosaic_hops.jpg'),
+    (('saaz', 'жатецкий', 'сааз'),               'img/products/saaz_hops.jpg'),
+    (('magnum', 'магнум'),                       'img/products/centennial_hops.jpg'),
+    (('cascade', 'каскад'),                      'img/products/cascade_hops.jpg'),
+    (('centennial', 'сентенниал'),               'img/products/centennial_hops.jpg'),
+    # ── Дрожжи ─────────────────────────────────────────────
+    (('safale', 'us-05', 'us05'),                'img/products/safale_us05_yeast.jpg'),
+    (('saflager', 'w-34', 'w34'),                'img/products/imperial_yeast.jpg'),
+    (('imperial', 'империал'),                   'img/products/imperial_yeast.jpg'),
+    # ── Наборы ─────────────────────────────────────────────
+    (('kit', 'набор'),                           'img/products/ipa_kit.jpg'),
+)
+
+# Fallback по slug категории — срабатывает, если ни одно ключевое
+# слово не совпало. Категория `equipment` намеренно отсутствует: для
+# оборудования нет подходящих фото, будет использован DEFAULT_PRODUCT_IMAGE.
+CATEGORY_IMAGE_MAP: dict[str, str] = {
+    'yeast':           'img/products/safale_us05_yeast.jpg',
+    'malts':           'img/products/pilsner_malt.jpg',
+    'aroma-hops':      'img/products/citra_hops.jpg',
+    'bittering-hops':  'img/products/centennial_hops.jpg',
+}
+
+# Общий placeholder — если ни image, ни keyword, ни категория не сработали.
+DEFAULT_PRODUCT_IMAGE: str = 'img/no-image.png'
 
 
 class Category(models.Model):
     """Категория товаров с поддержкой иерархической вложенности."""
 
-    name = models.CharField(
-        max_length=255,
-        verbose_name='Название',
-    )
-    slug = models.SlugField(
-        max_length=255,
-        unique=True,
-        verbose_name='Slug',
-    )
+    name = models.CharField(max_length=255, verbose_name='Название')
+    slug = models.SlugField(max_length=255, unique=True, verbose_name='Slug')
     parent = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -25,14 +58,8 @@ class Category(models.Model):
         related_name='children',
         verbose_name='Родительская категория',
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Дата создания',
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name='Дата обновления',
-    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
 
     class Meta:
         verbose_name = 'Категория'
@@ -40,35 +67,18 @@ class Category(models.Model):
         ordering = ['name']
 
     def __str__(self) -> str:
-        """Строковое представление категории."""
         return str(self.name)
 
     def get_absolute_url(self) -> str:
-        """Возвращает URL списка товаров, отфильтрованных по текущей категории."""
         return reverse('products:list_by_category', kwargs={'category_slug': self.slug})
 
 
 class Product(models.Model):
-    """
-    Товар интернет-магазина крафтового пивоварения Hop & Barley.
+    """Товар интернет-магазина крафтового пивоварения Hop & Barley."""
 
-    Хранит информацию о стоимости, остатках на складе, изображениях
-    и статусе активности (раздел 4 ТЗ).
-    """
-
-    name = models.CharField(
-        max_length=255,
-        verbose_name='Название',
-    )
-    slug = models.SlugField(
-        max_length=255,
-        unique=True,
-        verbose_name='Slug',
-    )
-    description = models.TextField(
-        blank=True,
-        verbose_name='Описание',
-    )
+    name = models.CharField(max_length=255, verbose_name='Название')
+    slug = models.SlugField(max_length=255, unique=True, verbose_name='Slug')
+    description = models.TextField(blank=True, verbose_name='Описание')
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -99,14 +109,8 @@ class Product(models.Model):
         verbose_name='Остаток на складе',
         help_text='Количество доступных для заказа единиц.',
     )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Дата добавления',
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        verbose_name='Дата изменения',
-    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата добавления')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата изменения')
 
     class Meta:
         verbose_name = 'Товар'
@@ -118,15 +122,40 @@ class Product(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Строковое представление товара."""
         return str(self.name)
 
     def get_absolute_url(self) -> str:
-        """Возвращает URL детальной страницы карточки товара."""
         return reverse('products:product_detail', kwargs={'slug': self.slug})
 
     @property
     def in_stock(self) -> bool:
-        """Проверяет фактическое наличие товара на складе.
-        Возвращает True, если физический остаток на складе строго больше 0."""
+        """Проверяет фактическое наличие товара на складе."""
         return bool(self.stock > 0)
+
+    @property
+    def display_image_url(self) -> str:
+        """URL картинки товара с четырёхуровневым fallback.
+
+        Приоритет:
+
+        1. Загруженное пользователем ``image`` (медиа).
+        2. Совпадение ключевых слов в ``name`` или ``slug`` с
+           ``IMAGE_KEYWORD_MAP`` — например, «Хмель Citra» → ``citra_hops.jpg``.
+        3. Совпадение ``category.slug`` с ``CATEGORY_IMAGE_MAP``.
+        4. Общий placeholder ``img/no-image.png``.
+
+        Используется в шаблонах вместо ``{% if product.image %}``,
+        чтобы у каждого товара гарантированно была осмысленная картинка.
+        """
+        if self.image:
+            return self.image.url
+
+        haystack = f'{self.name} {self.slug}'.lower()
+        for keywords, image_path in IMAGE_KEYWORD_MAP:
+            if any(kw in haystack for kw in keywords):
+                return static(image_path)
+
+        if self.category_id and self.category.slug in CATEGORY_IMAGE_MAP:
+            return static(CATEGORY_IMAGE_MAP[self.category.slug])
+
+        return static(DEFAULT_PRODUCT_IMAGE)

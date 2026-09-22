@@ -41,11 +41,7 @@
 {% partialdef cart_item %}
 <div class="cart-item" data-price="{{ item.price }}">
   {% with product=item.product %}
-    {% if product.image %}
-      <img src="{{ product.image.url }}" alt="{{ product.name }}" class="cart-item__image">
-    {% else %}
-      <img src="{% static 'img/products/citra_hops.jpg' %}" alt="{{ product.name }}" class="cart-item__image">
-    {% endif %}
+    <img src="{{ product.display_image_url }}" alt="{{ product.name }}" class="cart-item__image">
 
     <div class="cart-item__body">
       <div class="cart-item__details">

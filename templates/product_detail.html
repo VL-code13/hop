@@ -18,11 +18,8 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; background: #241c16; border: 1px solid #3d3228; border-radius: 12px; padding: 32px; margin-bottom: 40px;">
         <!-- Изображение -->
         <div style="border-radius: 8px; overflow: hidden; background: #1c1510; display: flex; align-items: center; justify-content: center; min-height: 380px;">
-            {% if product.image %}
-                <img src="{{ product.image.url }}" alt="{{ product.name }}" style="max-width: 100%; max-height: 400px; object-fit: contain;">
-            {% else %}
-                <img src="{% static 'img/no-image.png' %}" alt="{{ product.name }}" style="max-width: 100%; max-height: 400px; object-fit: contain;">
-            {% endif %}
+            <img src="{{ product.display_image_url }}" alt="{{ product.name }}"
+                 style="max-width: 100%; max-height: 400px; object-fit: contain;">
         </div>
 
         <!-- Информация и покупка -->

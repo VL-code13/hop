@@ -159,12 +159,7 @@
 {% partialdef product_card %}
 <div class="product-card">
     <a href="{{ product.get_absolute_url }}" class="product-card-link">
-        {% if product.image %}
-        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-card__image">
-        {% else %}
-        <img src="{% static 'img/products/citra_hops.jpg' %}" alt="{{ product.name }}"
-             class="product-card__image">
-        {% endif %}
+        <img src="{{ product.display_image_url }}" alt="{{ product.name }}" class="product-card__image">
         <div class="product-card__info">
             <h4 class="product-card__name">{{ product.name }}</h4>
             <p class="product-card__price">{{ product.price }} ₽</p>
