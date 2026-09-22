@@ -5,17 +5,19 @@
 """
 
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import F
+from django.utils import timezone
 
 from products.models import Product
 
 
 class Order(models.Model):
-    """
-    Модель заказа покупателя.
+    """Модель заказа покупателя.
 
     Хранит статус жизненного цикла, метод оплаты, итоговую стоимость
     и снимок контактных данных доставки (раздел 4 ТЗ).
@@ -95,10 +97,32 @@ class Order(models.Model):
             Decimal('0.00'),
         )
 
+    def recalculate_total(self, *, save: bool = True) -> Decimal:
+        """Пересчитывает ``total_price`` по текущим позициям.
+
+        Используется в админке (``OrderAdmin.save_formset``) и в
+        ``OrderItem.delete()`` для синхронизации snapshot-суммы заказа
+        после ручного редактирования позиций.
+
+        Args:
+            save: Если True — сохраняет новое значение в БД.
+
+        Returns:
+            Decimal: Актуальная сумма по позициям.
+        """
+        # Сбрасываем кеш prefetch, если он был заполнен до удаления позиции.
+        if hasattr(self, '_prefetched_objects_cache'):
+            self._prefetched_objects_cache.pop('items', None)
+
+        total = self.get_total_cost()
+        if save and total != self.total_price:
+            self.total_price = total
+            self.save(update_fields=['total_price', 'updated_at'])
+        return total
+
 
 class OrderItem(models.Model):
-    """
-    Товарная позиция в чеке заказа.
+    """Товарная позиция в чеке заказа.
 
     Фиксирует цену товара на момент покупки (price snapshot) по разделу 4 ТЗ.
     """
@@ -137,3 +161,65 @@ class OrderItem(models.Model):
     def get_cost(self) -> Decimal:
         """Вычисляет общую стоимость позиции."""
         return self.price * self.quantity
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Сохраняет позицию, автозаполняя цену для новых записей.
+
+        Поле ``price`` — snapshot цены на момент покупки. В админке оно
+        объявлено как ``readonly_fields``, чтобы нельзя было менять цену
+        задним числом у существующих позиций. Побочный эффект: при создании
+        **новой** позиции через админку форма не передаёт ``price``,
+        значение остаётся ``None`` и падает ``IntegrityError:
+        NOT NULL constraint failed: orders_orderitem.price``.
+
+        Метод подставляет текущую ``Product.price``, если ``price``
+        не задан. Для существующих позиций ничего не меняется — ``price``
+        уже зафиксирован при оформлении заказа через
+        ``OrderCreateSerializer``.
+        """
+        if self.price is None and self.product_id:
+            self.price = self.product.price
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        """Удаляет позицию, возвращая остаток товара на склад.
+
+        Логика возврата зависит от статуса заказа:
+
+        - ``PENDING`` / ``PAID`` / ``SHIPPED`` — товар ещё не у покупателя,
+          остаток возвращается на склад атомарным ``F('stock') + quantity``.
+        - ``DELIVERED`` — товар уже доставлен, остаток **не** возвращается.
+        - ``CANCELLED`` — остаток уже возвращён при отмене всего заказа
+          через ``OrderCancelSerializer``, повторный возврат запрещён.
+
+        После удаления позиции ``Order.total_price`` пересчитывается
+        по оставшимся позициям, чтобы snapshot-сумма оставалась
+        актуальной.
+
+        Returns:
+            tuple[int, dict[str, int]]: Результат ``super().delete()`` —
+            число удалённых объектов и разбивка по моделям.
+        """
+        order = self.order
+        product_id = self.product_id
+        quantity = self.quantity
+
+        # Возвращаем остаток, только если заказ не доставлен и не отменён.
+        should_restock = order.status not in (
+            Order.Status.DELIVERED,
+            Order.Status.CANCELLED,
+        )
+
+        if should_restock and product_id:
+            Product.objects.filter(id=product_id).update(
+                stock=F('stock') + quantity,
+                updated_at=timezone.now(),
+            )
+
+        result = super().delete(*args, **kwargs)
+
+        # Пересчитываем итоговую сумму заказа, если он ещё существует.
+        if order.pk:
+            order.recalculate_total()
+
+        return result

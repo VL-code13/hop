@@ -6,6 +6,7 @@
 """
 
 from decimal import Decimal
+from typing import Any
 
 from django.contrib import admin
 from django.db.models import Count, QuerySet, Sum
@@ -15,18 +16,26 @@ from .models import Order, OrderItem
 
 
 class OrderItemInline(admin.TabularInline):
-    """Табличный блок товарных позиций чека внутри карточки заказа."""
+    """Табличный блок товарных позиций чека внутри карточки заказа.
+
+    Поле ``price`` — snapshot цены на момент покупки, оно readonly
+    для существующих позиций (нельзя менять задним числом).
+
+    При удалении позиции (чекбокс «Удалить») срабатывает
+    ``OrderItem.delete()`` — он возвращает остаток товара на склад
+    (кроме статусов DELIVERED/CANCELLED) и пересчитывает
+    ``Order.total_price``.
+    """
 
     model = OrderItem
-    extra = 0
-    raw_id_fields = ('product',)
+    extra = 1  # одна пустая строка для добавления новой позиции
+    autocomplete_fields = ('product',)
     fields = ('product', 'price', 'quantity', 'cost_display')
-    # price — снимок цены на момент покупки, нельзя менять задним числом
     readonly_fields = ('price', 'cost_display')
 
     @admin.display(description='Сумма позиции')
     def cost_display(self, obj: OrderItem) -> str:
-        """Отображает расчетную стоимость единицы в чеке."""
+        """Отображает расчётную стоимость единицы в чеке."""
         if obj.pk:
             return f'{obj.get_cost()} ₽'
         return '—'
@@ -48,13 +57,24 @@ class OrderAdmin(admin.ModelAdmin):
     list_display_links = ('id', 'user')
     list_filter = ('status', 'payment_method', 'created_at')
     search_fields = ('id', 'user__username', 'user__email', 'shipping_address')
-    # total_price — вычисляемое финансовое поле, не редактируется руками
-    readonly_fields = ('created_at', 'updated_at', 'total_price')
-    raw_id_fields = ('user',)
+    readonly_fields = ('created_at', 'updated_at', 'total_price', 'total_cost_live')
+    autocomplete_fields = ('user',)
     date_hierarchy = 'created_at'
     inlines = [OrderItemInline]
     ordering = ('-created_at',)
     actions = ['mark_as_paid', 'mark_as_shipped', 'show_revenue']
+
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'status', 'payment_method', 'shipping_address'),
+        }),
+        ('Финансы', {
+            'fields': ('total_price', 'total_cost_live'),
+        }),
+        ('Служебное', {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Order]:
         """Аннотация суммарного числа позиций в заказе для быстрой аналитики."""
@@ -66,14 +86,65 @@ class OrderAdmin(admin.ModelAdmin):
         """Количество наименований в заказе."""
         return getattr(obj, 'items_count', 0)
 
+    @admin.display(description='Сумма по позициям (актуально)')
+    def total_cost_live(self, obj: Order) -> str:
+        """Актуальная сумма, посчитанная по текущим позициям.
+
+        Отображается рядом с сохранённым ``total_price`` — удобно
+        сравнить, не разошлись ли они после ручной правки в админке.
+        """
+        if obj.pk:
+            return f'{obj.get_total_cost()} ₽'
+        return '—'
+
+    def save_formset(
+        self,
+        request: HttpRequest,
+        form: Any,
+        formset: Any,
+        change: bool,
+    ) -> None:
+        """Явно сохраняет inline-формы, подставляя ``price`` для новых позиций.
+
+        Django внутри вызывает ``formset.save()``, который идёт в
+        ``ModelForm.save()`` → ``instance.save()``. Если по какой-то
+        причине ``OrderItem.save()`` не подставил цену (например,
+        из-за особенностей inline-форм), здесь мы это делаем явно:
+
+        1. ``formset.save(commit=False)`` — подготовка объектов без записи в БД.
+        2. Для каждого — подставляем ``price``, если не задан.
+        3. Сохраняем по одному, вызывая ``OrderItem.save()``.
+        4. Удаляем отмеченные чекбоксом позиции — ``OrderItem.delete()``
+           вернёт остаток на склад и пересчитает ``total_price``.
+        5. Вызываем ``save_m2m`` (на будущее, если появятся M2M-поля).
+        6. Пересчитываем ``Order.total_price`` — на случай, если позиции
+           были только добавлены или изменены без удаления.
+        """
+        instances = formset.save(commit=False)
+
+        for instance in instances:
+            # Автозаполнение для новых позиций, добавленных через админку.
+            # Поле `price` — readonly, Django его не передаёт в форму.
+            if not instance.price and instance.product_id:
+                instance.price = instance.product.price
+            instance.save()
+
+        # Удаление позиций, отмеченных чекбоксом «Удалить».
+        # OrderItem.delete() вернёт остаток на склад (если статус позволяет)
+        # и пересчитает total_price заказа.
+        for obj in formset.deleted_objects:
+            obj.delete()
+
+        formset.save_m2m()
+
+        # Финальный пересчёт суммы — на случай, если удалений не было,
+        # но количество в существующих позициях изменилось.
+        order: Order = form.instance  # type: ignore[attr-defined]
+        order.recalculate_total()
+
     @admin.action(description="Перевести выбранные заказы в статус 'Оплачен'")
     def mark_as_paid(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
-        """
-        Массовое подтверждение статуса оплаты.
-
-        Разрешает переход только из статуса PENDING.
-        Заказы в CANCELLED/PAID/SHIPPED/DELIVERED не переводятся.
-        """
+        """Массовое подтверждение статуса оплаты (только из PENDING)."""
         eligible = queryset.filter(status=Order.Status.PENDING)
         skipped = queryset.count() - eligible.count()
         updated = eligible.update(status=Order.Status.PAID)
@@ -84,12 +155,7 @@ class OrderAdmin(admin.ModelAdmin):
 
     @admin.action(description="Отметить выбранные как 'Отправленные'")
     def mark_as_shipped(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
-        """
-        Массовый перевод заказов в статус отправленных покупателю.
-
-        Разрешает переход только из статуса PAID.
-        Заказы в CANCELLED/PENDING/SHIPPED/DELIVERED не переводятся.
-        """
+        """Массовый перевод заказов в статус отправленных (только из PAID)."""
         eligible = queryset.filter(status=Order.Status.PAID)
         skipped = queryset.count() - eligible.count()
         updated = eligible.update(status=Order.Status.SHIPPED)
@@ -100,12 +166,7 @@ class OrderAdmin(admin.ModelAdmin):
 
     @admin.action(description='Показать выручку по выбранным заказам')
     def show_revenue(self, request: HttpRequest, queryset: QuerySet[Order]) -> None:
-        """
-        Считает суммарную выручку по выбранным заказам с разбивкой по статусам.
-
-        В выручку включаются только оплаченные заказы (PAID, SHIPPED, DELIVERED).
-        Заказы в PENDING и CANCELLED не учитываются — деньги по ним не поступили.
-        """
+        """Считает суммарную выручку по выбранным заказам с разбивкой по статусам."""
         paid_statuses = [
             Order.Status.PAID,
             Order.Status.SHIPPED,
