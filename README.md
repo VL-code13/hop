@@ -251,7 +251,8 @@ docker compose exec web python manage.py collectstatic --noinput
 
   ```python
   updated = Product.objects.filter(
-      id=p.id, stock__gte=qty,
+      id=p.id,
+      stock__gte=qty,
   ).update(stock=F('stock') - qty, updated_at=timezone.now())
   if not updated:
       raise ValidationError('Остаток изменился. Повторите попытку.')

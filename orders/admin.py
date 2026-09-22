@@ -65,15 +65,24 @@ class OrderAdmin(admin.ModelAdmin):
     actions = ['mark_as_paid', 'mark_as_shipped', 'show_revenue']
 
     fieldsets = (
-        (None, {
-            'fields': ('user', 'status', 'payment_method', 'shipping_address'),
-        }),
-        ('Финансы', {
-            'fields': ('total_price', 'total_cost_live'),
-        }),
-        ('Служебное', {
-            'fields': ('created_at', 'updated_at'),
-        }),
+        (
+            None,
+            {
+                'fields': ('user', 'status', 'payment_method', 'shipping_address'),
+            },
+        ),
+        (
+            'Финансы',
+            {
+                'fields': ('total_price', 'total_cost_live'),
+            },
+        ),
+        (
+            'Служебное',
+            {
+                'fields': ('created_at', 'updated_at'),
+            },
+        ),
     )
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Order]:

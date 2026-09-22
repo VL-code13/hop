@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from products.models import Category, Product
 
-from .models import Order
+from .models import Order, OrderItem
 
 User = get_user_model()
 
@@ -100,3 +100,80 @@ class OrdersBusinessLogicTestCase(TestCase):
         # Проверяем очистку корзины
         session_cart = self.client.session.get('cart', {})
         self.assertEqual(len(session_cart), 0)
+
+
+class OrderItemDeleteTestCase(TestCase):
+    """Тесты возврата остатка при удалении позиции заказа.
+
+    Для доступа к позиции используется ``order.items.get(product=...)``,
+    а не ``order.items.first()``. Разница: ``get()`` возвращает сразу
+    ``OrderItem`` и падает с ``DoesNotExist``, если объекта нет — mypy
+    доволен. ``first()`` возвращает ``OrderItem | None`` и требует
+    дополнительной проверки на ``None``.
+    """
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='deleter',
+            email='deleter@example.com',
+            password='pass12345',
+        )
+        self.category = Category.objects.create(name='Хмель', slug='hops')
+        self.product = Product.objects.create(
+            name='Citra',
+            slug='citra',
+            price=Decimal('500.00'),
+            category=self.category,
+            stock=10,
+            is_active=True,
+        )
+
+    def _make_order(self, status: str) -> Order:
+        """Создаёт заказ с одной позицией (товар x3) и заданным статусом."""
+        order = Order.objects.create(
+            user=self.user,
+            total_price=Decimal('1500.00'),
+            status=status,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            price=Decimal('500.00'),
+            quantity=3,
+        )
+        return order
+
+    def test_delete_item_returns_stock_for_pending(self) -> None:
+        """PENDING: удаление позиции возвращает остаток на склад."""
+        order = self._make_order(Order.Status.PENDING)
+        order.items.get(product=self.product).delete()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 13)  # 10 + 3
+
+    def test_delete_item_returns_stock_for_paid(self) -> None:
+        """PAID: удаление позиции возвращает остаток."""
+        order = self._make_order(Order.Status.PAID)
+        order.items.get(product=self.product).delete()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 13)
+
+    def test_delete_item_does_not_return_stock_for_delivered(self) -> None:
+        """DELIVERED: остаток НЕ возвращается — товар у покупателя."""
+        order = self._make_order(Order.Status.DELIVERED)
+        order.items.get(product=self.product).delete()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_delete_item_does_not_return_stock_for_cancelled(self) -> None:
+        """CANCELLED: остаток уже возвращён при отмене заказа, повторно нельзя."""
+        order = self._make_order(Order.Status.CANCELLED)
+        order.items.get(product=self.product).delete()
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_delete_item_recalculates_total(self) -> None:
+        """Удаление позиции пересчитывает Order.total_price."""
+        order = self._make_order(Order.Status.PENDING)
+        order.items.get(product=self.product).delete()
+        order.refresh_from_db()
+        self.assertEqual(order.total_price, Decimal('0.00'))

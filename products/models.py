@@ -11,34 +11,34 @@ from django.urls import reverse
 # Регистр игнорируется (`haystack.lower()`).
 IMAGE_KEYWORD_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
     # ── Солод ──────────────────────────────────────────────
-    (('chocolate', 'шоколад'),                   'img/products/caramel_malt.jpg'),
-    (('caramunich', 'карамельн'),                'img/products/caramel_malt.jpg'),
+    (('chocolate', 'шоколад'), 'img/products/caramel_malt.jpg'),
+    (('caramunich', 'карамельн'), 'img/products/caramel_malt.jpg'),
     (('maris', 'otter', 'pale ale', 'pale-ale'), 'img/products/maris_otter_malt.jpg'),
-    (('pilsner', 'пилзнер', 'пилснер'),          'img/products/pilsner_malt.jpg'),
-    (('wheat', 'пшенич', 'unmalted'),            'img/products/unmalted_wheat.jpg'),
+    (('pilsner', 'пилзнер', 'пилснер'), 'img/products/pilsner_malt.jpg'),
+    (('wheat', 'пшенич', 'unmalted'), 'img/products/unmalted_wheat.jpg'),
     # ── Хмель ──────────────────────────────────────────────
-    (('citra', 'цитра'),                         'img/products/citra_hops.jpg'),
-    (('mosaic', 'мозаик'),                       'img/products/mosaic_hops.jpg'),
-    (('saaz', 'жатецкий', 'сааз'),               'img/products/saaz_hops.jpg'),
-    (('magnum', 'магнум'),                       'img/products/centennial_hops.jpg'),
-    (('cascade', 'каскад'),                      'img/products/cascade_hops.jpg'),
-    (('centennial', 'сентенниал'),               'img/products/centennial_hops.jpg'),
+    (('citra', 'цитра'), 'img/products/citra_hops.jpg'),
+    (('mosaic', 'мозаик'), 'img/products/mosaic_hops.jpg'),
+    (('saaz', 'жатецкий', 'сааз'), 'img/products/saaz_hops.jpg'),
+    (('magnum', 'магнум'), 'img/products/centennial_hops.jpg'),
+    (('cascade', 'каскад'), 'img/products/cascade_hops.jpg'),
+    (('centennial', 'сентенниал'), 'img/products/centennial_hops.jpg'),
     # ── Дрожжи ─────────────────────────────────────────────
-    (('safale', 'us-05', 'us05'),                'img/products/safale_us05_yeast.jpg'),
-    (('saflager', 'w-34', 'w34'),                'img/products/imperial_yeast.jpg'),
-    (('imperial', 'империал'),                   'img/products/imperial_yeast.jpg'),
+    (('safale', 'us-05', 'us05'), 'img/products/safale_us05_yeast.jpg'),
+    (('saflager', 'w-34', 'w34'), 'img/products/imperial_yeast.jpg'),
+    (('imperial', 'империал'), 'img/products/imperial_yeast.jpg'),
     # ── Наборы ─────────────────────────────────────────────
-    (('kit', 'набор'),                           'img/products/ipa_kit.jpg'),
+    (('kit', 'набор'), 'img/products/ipa_kit.jpg'),
 )
 
 # Fallback по slug категории — срабатывает, если ни одно ключевое
 # слово не совпало. Категория `equipment` намеренно отсутствует: для
 # оборудования нет подходящих фото, будет использован DEFAULT_PRODUCT_IMAGE.
 CATEGORY_IMAGE_MAP: dict[str, str] = {
-    'yeast':           'img/products/safale_us05_yeast.jpg',
-    'malts':           'img/products/pilsner_malt.jpg',
-    'aroma-hops':      'img/products/citra_hops.jpg',
-    'bittering-hops':  'img/products/centennial_hops.jpg',
+    'yeast': 'img/products/safale_us05_yeast.jpg',
+    'malts': 'img/products/pilsner_malt.jpg',
+    'aroma-hops': 'img/products/citra_hops.jpg',
+    'bittering-hops': 'img/products/centennial_hops.jpg',
 }
 
 # Общий placeholder — если ни image, ни keyword, ни категория не сработали.

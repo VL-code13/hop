@@ -113,8 +113,7 @@ class ProductAdmin(admin.ModelAdmin):
                 product.save(update_fields=['is_active'])
                 messages.success(
                     request,
-                    f'Товар «{product.name}» деактивирован и убран с витрины. '
-                    f'История заказов сохранена.',
+                    f'Товар «{product.name}» деактивирован и убран с витрины. История заказов сохранена.',
                 )
                 return self._return_to_referer(request)
 
@@ -124,14 +123,10 @@ class ProductAdmin(admin.ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             'product': product,
-            'order_items': order_items.select_related(
-                'order', 'order__user'
-            ).order_by('-order__created_at')[:10],
+            'order_items': order_items.select_related('order', 'order__user').order_by('-order__created_at')[:10],
             'order_items_count': order_items.count(),
             'orders_count': order_items.values('order').distinct().count(),
-            'total_quantity': order_items.aggregate(
-                total=Sum('quantity')
-            )['total'] or 0,
+            'total_quantity': order_items.aggregate(total=Sum('quantity'))['total'] or 0,
             'opts': self.model._meta,
             'title': f'Удаление товара «{product.name}»',
             'is_popup': request.GET.get('_popup') == '1',
