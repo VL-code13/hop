@@ -8,6 +8,7 @@
 - [Настройка окружения](#настройка-окружения)
 - [Git workflow](#git-workflow)
 - [Стандарты кода](#стандарты-кода)
+- [Управление зависимостями (Poetry)](#управление-зависимостями-poetry)
 - [Тестирование](#тестирование)
 - [Коммиты](#коммиты)
 - [Pull Request](#pull-request)
@@ -32,38 +33,60 @@
 | Инструмент | Версия |
 |------------|--------|
 | Python | 3.12+ |
+| **Poetry** | **2.0+** |
 | PostgreSQL | 16 (для тестов и продакшена) |
 | Docker | 24+ (опционально, для БД) |
 | Git | 2.40+ |
 
-### Установка
+**Установка Poetry** (если не установлена):
+
+```bash
+pipx install poetry
+# или
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+### Установка проекта
 
 ```bash
 # 1. Клонировать репозиторий
 git clone https://github.com/VL-code13/hop.git
 cd hop
 
-# 2. Создать виртуальное окружение
-python -m venv .venv
-source .venv/bin/activate       # Linux / macOS
-# .venv\Scripts\activate         # Windows
+# 2. Установить все зависимости (main + dev)
+poetry install
 
-# 3. Установить зависимости
-pip install -r requirements.txt
-
-# 4. Создать .env из шаблона
+# 3. Создать .env из шаблона
 cp .env.example .env
-# Отредактируйте DJANGO_SECRET_KEY (можно сгенерировать):
-python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+# Отредактируйте DJANGO_SECRET_KEY:
+poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
-# 5. Применить миграции
-python manage.py migrate
+# 4. Применить миграции
+poetry run python manage.py migrate
 
-# 6. Создать администратора
-python manage.py createsuperuser
+# 5. Создать администратора
+poetry run python manage.py createsuperuser
 
-# 7. Запустить сервер разработки
-python manage.py runserver
+# 6. Запустить сервер разработки
+poetry run python manage.py runserver
+```
+
+### Полезные команды Poetry
+
+```bash
+# Активировать виртуальное окружение — дальше можно без префикса `poetry run`
+poetry shell
+
+# Выйти из окружения
+exit
+
+# Показать информацию об окружении
+poetry env info
+
+# Список установленных пакетов
+poetry show
+poetry show --only main
+poetry show --only dev
 ```
 
 ### Docker (опционально, для PostgreSQL)
@@ -87,11 +110,11 @@ docker compose up --build -d      # весь стек
 | `bugfix/<название>` | Исправление багов. |
 | `hotfix/<название>` | Срочные фиксы на проде. |
 | `docs/<название>` | Только документация. |
+| `chore/<название>` | Технические изменения (зависимости, CI). |
 
 ### Создание ветки под задачу
 
 ```bash
-# Всегда от свежей dev-ветки
 git checkout dev_3st_week
 git pull origin dev_3st_week
 git checkout -b feature/product-reviews
@@ -112,26 +135,24 @@ git checkout -b feature/product-reviews
 - **PEP 8** соблюдается через `ruff`.
 - **Типизация** обязательна для публичных функций и методов — через `mypy` и `django-stubs`.
 - **Docstrings** — для всех публичных модулей, классов и функций.
-- **Комментарии** — только для объяснения «почему», а не «что». Код должен говорить сам за себя.
+- **Комментарии** — только для объяснения «почему», а не «что».
 
 ### Линтеры и форматтеры
 
-Проект использует **Ruff** (замена flake8 + isort + black) и **Mypy**.
-
 ```bash
 # Проверка
-ruff check .
-ruff format --check .
-mypy .
+poetry run ruff check .
+poetry run ruff format --check .
+poetry run mypy .
 
 # Автоисправление
-ruff check . --fix
-ruff format .
+poetry run ruff check . --fix
+poetry run ruff format .
 ```
 
 ### Стиль кода
 
-- Кавычки — **одинарные** (`'string'`), кроме случаев, когда внутри есть одинарные.
+- Кавычки — **одинарные** (`'string'`).
 - Длина строки — **120** символов.
 - Отступы — **4 пробела** (не табы).
 - Импорты сгруппированы: stdlib → third-party → first-party (проверяет `ruff`).
@@ -171,6 +192,97 @@ def calculate_total_price(cart_items: list[dict]) -> Decimal:
 
 ---
 
+## Управление зависимостями (Poetry)
+
+Проект использует **Poetry 2.x** с PEP 621 манифестом (`[project]`) и PEP 735 группами (`[dependency-groups]`).
+
+### Структура `pyproject.toml`
+
+```toml
+[project]
+name = "hop-and-barley"
+...
+dependencies = [
+    "django==6.1.1",
+    ...
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    ...
+]
+
+[tool.poetry]
+package-mode = false    # это приложение, а не публикуемый пакет
+```
+
+### Добавление зависимостей
+
+```bash
+# Основная зависимость (пойдёт в прод)
+poetry add <package>
+poetry add "django-filter@^26.0"        # с ограничением версии
+poetry add "psycopg[binary]==3.3.5"     # с extras
+
+# Dev-зависимость (тесты, линтеры, стабы)
+poetry add --group dev <package>
+poetry add --group dev pytest-mock
+```
+
+### Удаление зависимостей
+
+```bash
+poetry remove <package>
+poetry remove --group dev <package>
+```
+
+### Обновление
+
+```bash
+# Обновить все пакеты в рамках ограничений из pyproject.toml
+poetry update
+
+# Обновить один пакет
+poetry update django
+
+# Пересобрать lock-файл после ручной правки pyproject.toml
+poetry lock
+```
+
+### Просмотр зависимостей
+
+```bash
+poetry show                  # все установленные
+poetry show --only main      # только продакшен
+poetry show --only dev       # только dev
+poetry show --tree           # дерево зависимостей
+poetry show <package>        # информация о пакете
+```
+
+### Ручное редактирование `pyproject.toml`
+
+Если правите `dependencies` или `[dependency-groups]` вручную — **обязательно** пересоберите lock:
+
+```bash
+poetry lock
+```
+
+Иначе `poetry install` упадёт с рассинхроном между манифестом и lock-файлом.
+
+### Что коммитить
+
+| Файл | Коммитить? |
+|------|:----------:|
+| `pyproject.toml` | ✅ Да |
+| `poetry.lock` | ✅ **Да** (обязательно) |
+| `.venv/` | ❌ Нет (в `.gitignore`) |
+| `requirements.txt` | ❌ Нет (устаревший формат) |
+
+**`poetry.lock` коммитится всегда** — это стандарт Poetry. Без него у разных разработчиков будут разные версии пакетов, и CI станет невоспроизводимым.
+
+---
+
 ## Тестирование
 
 ### Минимальные требования к PR
@@ -183,11 +295,14 @@ def calculate_total_price(cart_items: list[dict]) -> Decimal:
 
 ```bash
 # Быстро, на SQLite
-DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development -q --no-cov
+poetry run pytest --ds=config.settings.development -q --no-cov
 
 # Как в CI, на PostgreSQL
 docker compose up -d db
-DJANGO_SECRET_KEY=ci-secret-key pytest --create-db --migrations
+poetry run pytest --ds=config.settings.ci --create-db --migrations
+
+# С покрытием
+poetry run pytest --ds=config.settings.development --cov=. --cov-report=html
 ```
 
 ### Структура тестов
@@ -206,10 +321,6 @@ DJANGO_SECRET_KEY=ci-secret-key pytest --create-db --migrations
 
 ```
 <тип>(<область>): <краткое описание>
-
-<опциональное тело: почему, а не что>
-
-<опциональные футеры: Closes #123>
 ```
 
 ### Типы коммитов
@@ -234,14 +345,15 @@ fix(users): исправить падение при регистрации с �
 refactor(products): вынести фильтры каталога в products/services.py
 test(reviews): покрыть бизнес-правило «отзыв только после покупки»
 docs(readme): добавить примеры запросов с JWT
-chore(deps): обновить Django до 6.1.1
+chore(deps): мигрировать с requirements.txt на Poetry 2.x
+ci: обновить workflow под poetry run
 ```
 
 ### Примеры плохих коммитов
 
 ```bash
 fix                       # нечего не говорит
-WIP                       # черновик, не должен попадать в main
+WIP                       # черновик
 update files              # какие файлы? что обновил?
 Fix bug                   # какой баг?
 срочно                    # не по конвенции
@@ -249,8 +361,8 @@ Fix bug                   # какой баг?
 
 ### Правила
 
-- **Один коммит — одна логическая правка.** Не смешивайте фичу, рефакторинг и стиль.
-- **Императив в описании**: «добавить», «исправить», а не «добавил», «исправил».
+- **Один коммит — одна логическая правка.**
+- **Императив**: «добавить», «исправить».
 - **Точка в конце не ставится.**
 - Первая строка — **до 72 символов**.
 
@@ -260,59 +372,51 @@ Fix bug                   # какой баг?
 
 ### Перед созданием PR
 
-1. Убедитесь, что ваша ветка синхронизирована с `dev_3st_week`:
-
 ```bash
 git fetch origin
 git rebase origin/dev_3st_week
 ```
 
-2. Прогоните все проверки (см. [чек-лист](#чек-лист-перед-push)).
+Прогоните все проверки (см. [чек-лист](#чек-лист-перед-push)).
 
-3. Обновите `README.md`, если меняли:
-   - публичное API,
-   - переменные окружения,
-   - структуру проекта.
+Обновите `README.md`, если меняли:
+- публичное API,
+- переменные окружения,
+- структуру проекта,
+- зависимости.
 
 ### Шаблон PR
 
 ```markdown
 ## Что сделано
 
-Краткое описание изменений в 1–3 предложениях.
+Краткое описание изменений.
 
 ## Зачем
 
-Проблема или задача, которую решает PR. Ссылка на issue, если есть.
+Проблема или задача. Ссылка на issue.
 
 ## Как проверено
 
 - [ ] Написаны/обновлены тесты
-- [ ] `ruff check .` — зелёный
-- [ ] `ruff format --check .` — зелёный
-- [ ] `mypy .` — зелёный
-- [ ] `pytest` — все тесты проходят
+- [ ] `poetry run ruff check .` — зелёный
+- [ ] `poetry run ruff format --check .` — зелёный
+- [ ] `poetry run mypy .` — зелёный
+- [ ] `poetry run pytest` — все тесты проходят
 - [ ] Покрытие ≥ 70%
-- [ ] Проверено вручную в браузере (если UI)
-
-## Скриншоты (если UI)
-
-| Было | Стало |
-|------|-------|
-| ![](before.png) | ![](after.png) |
+- [ ] `poetry check --lock` — lock актуален
 
 ## Breaking changes
 
-Да / Нет. Если да — описать, что сломается.
+Да / Нет.
 
 Closes #<номер issue>
 ```
 
 ### Ревью
 
-- Минимум **один approve** перед merge (для соло-проекта — self-review через GitHub).
-- Все комментарии ревьюера должны быть resolved.
-- Merge — через **Squash & Merge**, чтобы не засорять историю мелкими коммитами.
+- Минимум **один approve** перед merge.
+- Merge — через **Squash & Merge**.
 
 ---
 
@@ -320,23 +424,26 @@ Closes #<номер issue>
 
 ```bash
 # 1. Линтер
-ruff check .
-ruff format --check .
+poetry run ruff check .
+poetry run ruff format --check .
 
 # 2. Типизация
-DJANGO_SECRET_KEY=dev DJANGO_SETTINGS_MODULE=config.settings.development mypy .
+poetry run mypy .
 
 # 3. Django check
-python manage.py check
+poetry run python manage.py check
 
 # 4. Миграции актуальны
-python manage.py makemigrations --check --dry-run
+poetry run python manage.py makemigrations --check --dry-run
 
-# 5. Тесты
-DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development -q
+# 5. Lock-файл актуален
+poetry check --lock
+
+# 6. Тесты
+poetry run pytest --ds=config.settings.development -q
 ```
 
-Если **все пять** зелёные — можно пушить. Если что-то красное — правьте локально.
+Если **все шесть** зелёные — можно пушить.
 
 ### Полная симуляция CI
 
@@ -344,15 +451,17 @@ DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development -q
 docker compose up -d db
 
 export DJANGO_SETTINGS_MODULE=config.settings.ci
-export DJANGO_SECRET_KEY=ci-secret-key
+export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
 
-ruff check . && ruff format --check . && mypy . && \
-python manage.py check && \
-python manage.py makemigrations --check --dry-run && \
-python manage.py migrate --noinput && \
-pytest --create-db --migrations --cov-fail-under=70
+poetry run ruff check . && \
+poetry run ruff format --check . && \
+poetry run mypy . && \
+poetry run python manage.py check && \
+poetry run python manage.py makemigrations --check --dry-run && \
+poetry run python manage.py migrate --noinput && \
+poetry run pytest --create-db --migrations --cov-fail-under=70
 ```
 
 ---
@@ -382,6 +491,7 @@ pytest --create-db --migrations --cov-fail-under=70
 
 - ОС: Ubuntu 24.04
 - Python: 3.12.3
+- Poetry: 2.x.x (вывод `poetry --version`)
 - Ветка: `dev_3st_week`
 - Коммит: `a1b2c3d`
 - `DJANGO_SETTINGS_MODULE`: `config.settings.development`
@@ -392,23 +502,22 @@ pytest --create-db --migrations --cov-fail-under=70
 Traceback (most recent call last):
   File "...", line 42, in ...
 ```
-
-## Скриншоты
-
-Если применимо.
 ```
 
 ### Чего не делать
 
-- Не публикуйте `SECRET_KEY`, пароли, `POSTGRES_PASSWORD` — даже учебные.
-- Не прикладывайте `db.sqlite3` — вместо этого дайте шаги воспроизведения.
-- Не пишите «всё сломалось» без деталей — issue будет закрыт как «needs reproduction».
+- Не публикуйте `SECRET_KEY`, пароли, `POSTGRES_PASSWORD`.
+- Не прикладывайте `db.sqlite3`.
+- Не пишите «всё сломалось» без деталей.
 
 ---
 
 ## Полезные ссылки
 
 - [README.md](README.md) — общее описание проекта
+- [Poetry docs](https://python-poetry.org/docs/) — документация Poetry
+- [PEP 621](https://peps.python.org/pep-0621/) — метаданные проекта
+- [PEP 735](https://peps.python.org/pep-0735/) — dependency groups
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)
 - [DRF docs](https://www.django-rest-framework.org/)

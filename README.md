@@ -10,7 +10,8 @@
 - **двухуровневую защиту от двойной оплаты** — `select_for_update` + `UniqueConstraint` на БД;
 - **нормализацию телефонов** через `users/phone.py` — единый формат `+7XXXXXXXXXX` в БД;
 - **DRY бизнес-правило отзывов** — «только после покупки» живёт в `reviews/services.py` и переиспользуется в web и API;
-- **кастомную аналитическую панель** с дашбордом, складским контролем и журналом заказов.
+- **кастомную аналитическую панель** с дашбордом, складским контролем и журналом заказов;
+- **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
 
 [![CI](https://github.com/VL-code13/hop/actions/workflows/ci.yml/badge.svg?branch=dev_3st_week)](https://github.com/VL-code13/hop/actions/workflows/ci.yml)
 
@@ -37,6 +38,7 @@
 | Категория | Технология / Библиотека | Назначение |
 |-----------|------------------------|------------|
 | Язык | Python 3.12 | Runtime |
+| Менеджер зависимостей | **Poetry 2.x** | Lockfile, изоляция venv, разделение main/dev |
 | Бэкенд-платформа | Django 6.1.1 | Веб-ядро, ORM, маршрутизация, шаблонизатор, сигналы |
 | REST API | Django REST Framework 3.18 | Сериализация, валидация запросов, ViewSets, permissions |
 | JWT-авторизация | djangorestframework-simplejwt 5.5.1 | Выпуск, проверка и ротация Access / Refresh токенов |
@@ -119,9 +121,9 @@ hop-and-barley/
 ├── .env.example
 ├── docker-compose.yaml
 ├── Dockerfile
-├── pytest.ini
-├── pyproject.toml              # Конфигурация Ruff и Mypy
-├── requirements.txt
+├── pyproject.toml              # Poetry + Ruff + Mypy (единый конфиг)
+├── poetry.lock                 # Зафиксированные версии зависимостей
+├── pytest.ini                  # Конфигурация pytest
 ├── conftest.py                 # Глобальные pytest-фикстуры
 ├── manage.py
 └── README.md
@@ -131,58 +133,67 @@ hop-and-barley/
 
 ## Быстрый старт
 
+### Требования
+
+| Инструмент | Версия | Установка |
+|------------|--------|-----------|
+| Python | 3.12+ | [python.org](https://www.python.org/downloads/) |
+| Poetry | 2.0+ | `pipx install poetry` или `curl -sSL https://install.python-poetry.org \| python3 -` |
+| Docker | 24+ (опционально) | [docs.docker.com](https://docs.docker.com/get-docker/) |
+
 ### Вариант A: Локальная разработка (SQLite, без Docker)
 
-Самый быстрый способ запустить проект.
-
-**1. Клонируйте репозиторий и создайте окружение:**
+**1. Клонируйте репозиторий:**
 
 ```bash
 git clone https://github.com/VL-code13/hop.git
 cd hop
-python -m venv .venv
-source .venv/bin/activate       # Linux / macOS
-# .venv\Scripts\activate         # Windows
 ```
 
-**2. Установите зависимости:**
+**2. Установите зависимости через Poetry:**
 
 ```bash
-pip install -r requirements.txt
+poetry install
 ```
+
+Poetry создаст `.venv/` в проекте и установит все зависимости из `poetry.lock`. Dev-пакеты (`pytest`, `ruff`, `mypy`) тоже установятся — они в группе `dev`.
 
 **3. Создайте `.env` (опционально — `development.py` подставляет дефолты):**
 
-```dotenv
-DJANGO_SECRET_KEY=dev-insecure-key-change-me
-DJANGO_DEBUG=True
+```bash
+cp .env.example .env
+```
+
+Отредактируйте `DJANGO_SECRET_KEY` — можно сгенерировать:
+
+```bash
+poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 ```
 
 **4. Примените миграции и создайте администратора:**
 
 ```bash
-python manage.py migrate
-python manage.py createsuperuser
+poetry run python manage.py migrate
+poetry run python manage.py createsuperuser
 ```
 
 **5. Запустите сервер:**
 
 ```bash
-python manage.py runserver
+poetry run python manage.py runserver
 ```
 
 Приложение: http://127.0.0.1:8000/
 
-### Вариант B: Docker Compose (PostgreSQL + WhiteNoise)
+> **Совет:** активируйте виртуальное окружение Poetry командой `poetry shell` — тогда `python`, `pytest`, `ruff` будут работать без префикса `poetry run`.
 
-Полный стек: PostgreSQL 16, Django с WhiteNoise. Публичный порт — **8080**.
+### Вариант B: Docker Compose (PostgreSQL + WhiteNoise)
 
 **1. Подготовьте `.env`:**
 
 ```bash
 cp .env.example .env
-# Отредактируйте DJANGO_SECRET_KEY, POSTGRES_*
-# Для использования PostgreSQL задайте:
+# Для PostgreSQL задайте:
 #   DJANGO_SETTINGS_MODULE=config.settings.prod
 #   POSTGRES_HOST=db
 ```
@@ -196,9 +207,9 @@ docker compose up --build -d
 **3. Примените миграции и соберите статику:**
 
 ```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
-docker compose exec web python manage.py collectstatic --noinput
+docker compose exec web poetry run python manage.py migrate
+docker compose exec web poetry run python manage.py createsuperuser
+docker compose exec web poetry run python manage.py collectstatic --noinput
 ```
 
 **Точки входа:**
@@ -209,8 +220,6 @@ docker compose exec web python manage.py collectstatic --noinput
 | Админ-панель с аналитикой | http://localhost:8080/admin/ |
 | Swagger UI | http://localhost:8080/api/docs/ |
 | ReDoc | http://localhost:8080/api/redoc/ |
-
-> **Важно:** по умолчанию `docker-compose.yaml` собран для учебного запуска. Если `DJANGO_SETTINGS_MODULE` не задан, `web`-контейнер использует `config.settings.development` (SQLite). Для PostgreSQL задайте `DJANGO_SETTINGS_MODULE=config.settings.prod` в `.env`.
 
 ---
 
@@ -270,9 +279,6 @@ docker compose exec web python manage.py collectstatic --noinput
 - **Двухфакторная проверка**: оставить отзыв (1–5 звёзд) может только авторизованный клиент, ранее купивший и оплативший (`PAID`) или получивший (`DELIVERED`) товар.
 - `UniqueConstraint(fields=['product', 'user'])` на уровне БД — повторный отзыв невозможен.
 - **DRY-подход**: бизнес-правило вынесено в `reviews/services.py:get_review_permissions()` и **переиспользуется** в web-view и API-сериализаторе.
-- Web-view использует `serializer.is_valid(raise_exception=True)` и конвертирует DRF-исключения в `messages`:
-  - `PermissionDenied` (нет покупки) → `messages.error`;
-  - `ValidationError` (дубль, плохой рейтинг) → `messages.warning`.
 
 ### Сервис эмуляции платежей (`payments`)
 
@@ -284,18 +290,15 @@ docker compose exec web python manage.py collectstatic --noinput
 - **Трёхуровневая защита от двойной оплаты**:
   1. Проверка статуса в `get_payable_order`.
   2. Проверка статуса под `select_for_update` в `process_payment`.
-  3. `UniqueConstraint(fields=['order'], condition=Q(status='SUCCESS'))` на уровне БД — partial unique index.
-
-- `IntegrityError` от constraint'а конвертируется в `OrderAlreadyPaidError` — пользователь видит понятную ошибку вместо 500.
+  3. `UniqueConstraint(fields=['order'], condition=Q(status='SUCCESS'))` на уровне БД.
 
 ### Пользователи и безопасность (`users`)
 
 - **Кастомный бэкенд** `EmailOrUsernameModelBackend`: вход по `username` или `email`.
-- **Валидация пароля** через `validate_password` — все `AUTH_PASSWORD_VALIDATORS` работают (раньше пароль `123` регистрировался).
+- **Валидация пароля** через `validate_password` — все `AUTH_PASSWORD_VALIDATORS` работают.
 - **Нормализация телефона** через `users/phone.py`: любая форма ввода → `+7XXXXXXXXXX` в БД.
 - **Экранирование email** через `format_html` вместо `mark_safe` (защита от XSS).
 - **Soft Delete** + **реактивация через сброс пароля**.
-- Автосоздание `Profile` через сигнал `post_save`.
 
 ---
 
@@ -325,8 +328,6 @@ docker compose exec web python manage.py collectstatic --noinput
 
 ## Примеры запросов с JWT
 
-Ниже — сценарий «от логина до отмены заказа» через `curl`.
-
 ### 1. Получение пары токенов (вход)
 
 ```bash
@@ -343,8 +344,6 @@ curl -X POST http://localhost:8080/api/users/login/ \
   "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
-
-> Поле называется `username`, но принимает и email — благодаря `EmailOrUsernameModelBackend`.
 
 ### 2. Сохранение access-токена в переменную
 
@@ -389,13 +388,9 @@ curl -X POST http://localhost:8080/api/orders/ \
   "id": 42,
   "user": "brewer@example.com",
   "status": "pending",
-  "payment_method": "card",
   "total_price": "1100.00",
-  "shipping_address": "г. Москва, ул. Пивоваров, д. 10, кв. 5",
-  "created_at": "2026-01-15T14:30:00Z",
   "items": [
     {
-      "id": 1,
       "product": 1,
       "product_name": "Хмель Citra (100г)",
       "price": "550.00",
@@ -405,31 +400,7 @@ curl -X POST http://localhost:8080/api/orders/ \
 }
 ```
 
-### 6. Добавление отзыва (только после PAID/DELIVERED)
-
-```bash
-curl -X POST http://localhost:8080/api/products/1/reviews/ \
-  -H "Authorization: Bearer $ACCESS" \
-  -H "Content-Type: application/json" \
-  -d '{"rating": 5, "comment": "Отличный хмель, сварил IPA!"}'
-```
-
-Если пользователь не покупал — `403 Forbidden`:
-
-```json
-{"detail": "Оставить отзыв можно только на товар, который вы приобрели и оплатили."}
-```
-
-### 7. Отмена заказа
-
-```bash
-curl -X DELETE http://localhost:8080/api/orders/42/ \
-  -H "Authorization: Bearer $ACCESS"
-```
-
-Ответ `204 No Content`. Остатки товаров возвращаются на склад атомарно.
-
-### 8. Обновление access-токена
+### 6. Обновление access-токена
 
 ```bash
 curl -X POST http://localhost:8080/api/token/refresh/ \
@@ -437,30 +408,15 @@ curl -X POST http://localhost:8080/api/token/refresh/ \
   -d '{"refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'
 ```
 
-### 9. Ошибка авторизации (без токена)
-
-```bash
-curl -X GET http://localhost:8080/api/orders/
-```
-
-Ответ `401 Unauthorized`:
-
-```json
-{"detail": "Authentication credentials were not provided."}
-```
-
 ---
 
 ## Аутентификация и безопасность
-
-Приложение поддерживает **гибридный режим** контроля доступа.
 
 ### Web UI (браузер)
 
 - Сессионная аутентификация Django (`SessionAuthentication`).
 - CSRF-токены во всех формах POST.
 - `SESSION_COOKIE_AGE = 30 дней`.
-- Логаут — только через POST.
 
 ### REST API (клиенты)
 
@@ -475,21 +431,6 @@ curl -X GET http://localhost:8080/api/orders/
 | `REFRESH_TOKEN_LIFETIME` | 7 дней |
 | `ROTATE_REFRESH_TOKENS` | `True` |
 | `BLACKLIST_AFTER_ROTATION` | `False` |
-
-### Валидация паролей
-
-Все `AUTH_PASSWORD_VALIDATORS` активны — вызываются через `validate_password()` в `UserRegisterForm.clean_password1()`:
-
-- `UserAttributeSimilarityValidator`
-- `MinimumLengthValidator`
-- `CommonPasswordValidator`
-- `NumericPasswordValidator`
-
-### Безопасность production (`config.settings.prod`)
-
-- Guard: `DEBUG=True` разрешён только при `ALLOW_DEBUG_IN_PROD=1`.
-- `WHITENOISE_MANIFEST_STRICT = True`.
-- `SECRET_KEY` обязателен (иначе `ImproperlyConfigured`).
 
 ---
 
@@ -506,7 +447,7 @@ curl -X GET http://localhost:8080/api/orders/
 Проверка схемы на валидность:
 
 ```bash
-python manage.py spectacular --validate
+poetry run python manage.py spectacular --validate
 ```
 
 ---
@@ -518,7 +459,7 @@ python manage.py spectacular --validate
 **Сценарий 1 — быстро, на SQLite:**
 
 ```bash
-DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development -q --no-cov
+poetry run pytest --ds=config.settings.development -q --no-cov
 ```
 
 **Сценарий 2 — как в CI, на PostgreSQL:**
@@ -528,13 +469,13 @@ DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development -q --no-cov
 docker compose up -d db
 
 # 2. Прогнать тесты
-DJANGO_SECRET_KEY=ci-secret-key pytest --create-db --migrations
+poetry run pytest --ds=config.settings.ci --create-db --migrations
 ```
 
 **Сценарий 3 — с полным coverage-отчётом:**
 
 ```bash
-DJANGO_SECRET_KEY=dev pytest --ds=config.settings.development \
+poetry run pytest --ds=config.settings.development \
   --cov=. --cov-report=term-missing --cov-report=html
 ```
 
@@ -542,29 +483,45 @@ HTML-отчёт: `htmlcov/index.html`.
 
 ### Покрытие
 
-Целевой порог — **70%** (`--cov-fail-under=70`) по разделу 6.3 ТЗ.
+Целевой порог — **70%** (`--cov-fail-under=70`).
 
 Декларативные файлы (`apps.py`, `migrations`, `wsgi.py`, `asgi.py`, `urls.py`, `admin.py`, `conftest.py`) исключены через `.coveragerc`.
-
-### Структура тестов
-
-| Слой | Где | Стиль |
-|------|-----|-------|
-| Модели и web-views | `<app>/tests.py` | `django.test.TestCase` |
-| Сервисы (без HTTP) | `<app>/tests_services.py` | pytest с `@pytest.mark.django_db` |
-| Общие фикстуры | `conftest.py` | `@pytest.fixture` |
 
 ### Статический анализ
 
 ```bash
 # Линтер
-ruff check .
+poetry run ruff check .
 
 # Форматирование
-ruff format --check .
+poetry run ruff format --check .
 
 # Типизация (django-stubs)
-DJANGO_SECRET_KEY=dev DJANGO_SETTINGS_MODULE=config.settings.development mypy .
+poetry run mypy .
+```
+
+### Управление зависимостями
+
+```bash
+# Добавить основную зависимость
+poetry add <package>
+
+# Добавить dev-зависимость
+poetry add --group dev <package>
+
+# Удалить
+poetry remove <package>
+poetry remove --group dev <package>
+
+# Обновить lock-файл после ручной правки pyproject.toml
+poetry lock
+
+# Показать дерево зависимостей
+poetry show --tree
+
+# Показать только основные / только dev
+poetry show --only main
+poetry show --only dev
 ```
 
 ---
@@ -575,23 +532,16 @@ GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 
 **Шаги пайплайна:**
 
-1. **Checkout** и **Setup Python 3.12** с кэшем pip.
-2. **Install dependencies** — `pip install -r requirements.txt`.
-3. **Ruff check** — `ruff check .`.
-4. **Ruff format check** — `ruff format --check .`.
-5. **Mypy** — статическая типизация.
-6. **Django system check** — `python manage.py check`.
-7. **Check migrations** — `python manage.py makemigrations --check --dry-run`.
-8. **Run migrations** на PostgreSQL 16 (service container).
-9. **Pytest** — `pytest --create-db --migrations --cov-fail-under=70`.
-
-**Конфигурация:**
-
-- `DJANGO_SETTINGS_MODULE=config.settings.ci`.
-- PostgreSQL 16 как service container с healthcheck.
-- `permissions: contents: read` — минимальные права `GITHUB_TOKEN`.
-- `concurrency` — отмена параллельных запусков на одной ветке.
-- `timeout-minutes: 15` — защита от зависаний.
+1. **Checkout** и **Setup Python 3.12** с кэшем Poetry.
+2. **Install Poetry** — `pipx install poetry`.
+3. **Install dependencies** — `poetry install --no-interaction`.
+4. **Ruff check** — `poetry run ruff check .`.
+5. **Ruff format check** — `poetry run ruff format --check .`.
+6. **Mypy** — `poetry run mypy .`.
+7. **Django system check** — `poetry run python manage.py check`.
+8. **Check migrations** — `poetry run python manage.py makemigrations --check --dry-run`.
+9. **Run migrations** на PostgreSQL 16 (service container).
+10. **Pytest** — `poetry run pytest --create-db --migrations --cov-fail-under=70`.
 
 **Локальная симуляция CI:**
 
@@ -603,11 +553,13 @@ export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
 
-ruff check . && ruff format --check . && mypy . && \
-python manage.py check && \
-python manage.py makemigrations --check --dry-run && \
-python manage.py migrate --noinput && \
-pytest --create-db --migrations --cov-fail-under=70
+poetry run ruff check . && \
+poetry run ruff format --check . && \
+poetry run mypy . && \
+poetry run python manage.py check && \
+poetry run python manage.py makemigrations --check --dry-run && \
+poetry run python manage.py migrate --noinput && \
+poetry run pytest --create-db --migrations --cov-fail-under=70
 ```
 
 ---
@@ -618,25 +570,19 @@ pytest --create-db --migrations --cov-fail-under=70
 
 - **Аналитический дашборд**: выручка по оплаченным заказам (`PAID`, `SHIPPED`, `DELIVERED`), счётчик заказов в обработке, число активных клиентов и товаров.
 - **Складской контроль**: список позиций с критическим остатком (< 5 шт.).
-- **Журнал недавних заказов** с прямыми ссылками на редактирование.
-- **Кастомные actions** в `OrderAdmin`:
-  - `mark_as_paid` — перевод в `Paid` только из `Pending`.
-  - `mark_as_shipped` — перевод в `Shipped` только из `Paid`.
-  - `show_revenue` — выручка по выбранным заказам с разбивкой по статусам.
-- **Аннотации**: `Count('items')`, `Count('products')`.
+- **Кастомные actions** в `OrderAdmin`: `mark_as_paid`, `mark_as_shipped`, `show_revenue`.
 - **Массовые действия** в `ProductAdmin`: `make_active`, `make_inactive`.
-- **Финансовые транзакции read-only**: `PaymentTransactionAdmin` запрещает создание и редактирование — статус меняется только через `PaymentService`.
+- **Финансовые транзакции read-only**: `PaymentTransactionAdmin` запрещает создание и редактирование.
+- **Кастомная страница удаления товара**: товары с историей заказов не удаляются, а деактивируются через `delete_view` + `has_delete_permission`.
 
 ---
 
 ## Ограничения и известные компромиссы
 
-Проект создан в учебных целях — некоторые решения **осознанно упрощены**.
-
 ### Совместимость с БД
 
 - **`select_for_update()` не работает на SQLite.** Django молча игнорирует этот метод — реальной блокировки строк не происходит. Защита от overselling работает за счёт `filter(stock__gte=qty).update(F('stock') - qty)`, который атомарен на любой БД.
-- **Разная семантика `NULL`** в сортировках: SQLite и PostgreSQL по-разному упорядочивают `NULL` при `ORDER BY DESC`. Для сортировки «популярные» (`-avg_rating`) стоит добавить `nulls_last=True` в `order_by()`.
+- **Разная семантика `NULL`** в сортировках: SQLite и PostgreSQL по-разному упорядочивают `NULL` при `ORDER BY DESC`.
 - **Регистронезависимый поиск** через `icontains` на SQLite не учитывает регистр кириллицы. На PostgreSQL работает корректно.
 
 ### Асинхронность и фоновые задачи
@@ -646,7 +592,7 @@ pytest --create-db --migrations --cov-fail-under=70
 
 ### GraphQL
 
-- Раздел 3.9 ТЗ (**бонус**) **не реализован**. Аналитика доступна через REST API и административный дашборд.
+- Раздел 3.9 ТЗ (**бонус**) **не реализован** на момент текущей версии. Аналитика доступна через REST API и административный дашборд.
 
 ### Хранение файлов
 
@@ -656,20 +602,17 @@ pytest --create-db --migrations --cov-fail-under=70
 ### Безопасность
 
 - `SECRET_KEY` в Docker Compose берётся из `.env` — для продакшена нужен секрет-менеджер (Vault, AWS Secrets Manager).
-- `BLACKLIST_AFTER_ROTATION = False` — украденный refresh-токен можно использовать параллельно с новым. Для включения blacklist нужно добавить `rest_framework_simplejwt.token_blacklist` в `INSTALLED_APPS`.
+- `BLACKLIST_AFTER_ROTATION = False` — украденный refresh-токен можно использовать параллельно с новым.
 - `SECURE_HSTS_*`, `SECURE_PROXY_SSL_HEADER` не заданы — при деплое за nginx их надо добавить в `prod.py`.
-- `SECURE_SSL_REDIRECT=True` в `config.settings.ci` отключён для тестов через `conftest.py` (autouse-фикстура).
 
 ### Платежи
 
-- **Платёжный шлюз эмулирован** (`simulate_success=True`). Реальной интеграции со Stripe/YooKassa/CloudPayments нет.
-- Нет webhook-эндпоинта для получения асинхронных уведомлений от платёжного провайдера.
+- **Платёжный шлюз эмурован** (`simulate_success=True`). Реальной интеграции со Stripe/YooKassa/CloudPayments нет.
 
 ### Тесты
 
 - Покрытие тестами сфокусировано на бизнес-логике и моделях. Views, сериализаторы и API-контроллеры покрыты частично.
 - Нет тестов на race condition (`select_for_update`) — сложно воспроизвести в `TestCase`.
-- Нет нагрузочных/интеграционных тестов.
 
 ### Инфраструктура
 
