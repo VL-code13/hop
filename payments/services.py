@@ -18,19 +18,13 @@ from .models import PaymentTransaction
 class PaymentError(Exception):
     """Базовое исключение ошибок платежного сервиса."""
 
-    pass
-
 
 class OrderAlreadyPaidError(PaymentError):
     """Заказ уже был успешно оплачен ранее."""
 
-    pass
-
 
 class InvalidOrderStateError(PaymentError):
     """Заказ находится в статусе, недоступном для оплаты (например, отменен)."""
-
-    pass
 
 
 class PaymentService:
