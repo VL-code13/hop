@@ -44,11 +44,7 @@ class ProductReviewsAPIView(generics.ListCreateAPIView):
         Возвращает отзывы конкретного товара с JOIN автора во избежание N+1 запросов.
         """
         product_id = self.kwargs.get('product_id')
-        return (
-            Review.objects.filter(product_id=product_id)
-            .select_related('user')
-            .order_by('-created_at')
-        )
+        return Review.objects.filter(product_id=product_id).select_related('user').order_by('-created_at')
 
     def get_serializer_context(self) -> dict[str, Any]:
         """

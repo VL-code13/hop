@@ -4,7 +4,6 @@
 Реализует требования раздела 3.6 ТЗ («Управление пользователями»).
 """
 
-
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin

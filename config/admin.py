@@ -25,9 +25,7 @@ class HopBarleyAdminSite(admin.AdminSite):
     index_title = 'Аналитика и управление магазином'
     index_template = 'admin/index.html'
 
-    def index(
-        self, request: HttpRequest, extra_context: dict[str, Any] | None = None
-    ) -> TemplateResponse:
+    def index(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> TemplateResponse:
         """
         Переопределенный метод главной страницы админки с передачей метрик.
         """
@@ -35,9 +33,9 @@ class HopBarleyAdminSite(admin.AdminSite):
 
         # 1. Суммарная выручка по оплаченным заказам
         paid_statuses = [Order.Status.PAID, Order.Status.SHIPPED, Order.Status.DELIVERED]
-        total_sales = Order.objects.filter(status__in=paid_statuses).aggregate(
-            total=Sum('total_price')
-        )['total'] or Decimal('0.00')
+        total_sales = Order.objects.filter(status__in=paid_statuses).aggregate(total=Sum('total_price'))[
+            'total'
+        ] or Decimal('0.00')
 
         # 2. Метрики заказов
         total_orders_count = Order.objects.count()
@@ -49,26 +47,23 @@ class HopBarleyAdminSite(admin.AdminSite):
 
         # 4. Товары с низким остатком (менее 5 штук)
         low_stock_products = (
-            Product.objects.filter(is_active=True, stock__lte=5)
-            .select_related('category')
-            .order_by('stock')[:5]
+            Product.objects.filter(is_active=True, stock__lte=5).select_related('category').order_by('stock')[:5]
         )
 
         # 5. Последние 5 заказов
-        recent_orders = (
-            Order.objects.select_related('user')
-            .order_by('-created_at')[:5]
-        )
+        recent_orders = Order.objects.select_related('user').order_by('-created_at')[:5]
 
         # Заполняем контекст для шаблона admin/index.html
-        extra_context.update({
-            'total_sales': total_sales,
-            'total_orders_count': total_orders_count,
-            'pending_orders_count': pending_orders_count,
-            'total_users_count': total_users_count,
-            'total_products_count': total_products_count,
-            'low_stock_products': low_stock_products,
-            'recent_orders': recent_orders,
-        })
+        extra_context.update(
+            {
+                'total_sales': total_sales,
+                'total_orders_count': total_orders_count,
+                'pending_orders_count': pending_orders_count,
+                'total_users_count': total_users_count,
+                'total_products_count': total_products_count,
+                'low_stock_products': low_stock_products,
+                'recent_orders': recent_orders,
+            }
+        )
 
         return super().index(request, extra_context=extra_context)

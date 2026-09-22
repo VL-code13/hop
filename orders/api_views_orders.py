@@ -64,7 +64,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary='Отменить заказ',
         description='Переводит статус заказа в CANCELLED и возвращает списанный товар обратно на склад.',
-        responses={204: OpenApiResponse(description='Заказ успешно отменен'), 400: OpenApiResponse(description='Заказ нельзя отменить')},
+        responses={
+            204: OpenApiResponse(description='Заказ успешно отменен'),
+            400: OpenApiResponse(description='Заказ нельзя отменить'),
+        },
     )
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Отмена заказа через специализированный OrderCancelSerializer."""
@@ -95,16 +98,21 @@ class CartAPIView(APIView):
             }
             for item in cart
         ]
-        return Response({
-            'items': items,
-            'total_items': len(cart),
-            'total_price': cart.get_total_price(),
-        })
+        return Response(
+            {
+                'items': items,
+                'total_items': len(cart),
+                'total_price': cart.get_total_price(),
+            }
+        )
 
     @extend_schema(
         summary='Добавить товар в корзину',
         request=CartItemSerializer,
-        responses={200: OpenApiResponse(description='Товар добавлен'), 400: OpenApiResponse(description='Превышен остаток')},
+        responses={
+            200: OpenApiResponse(description='Товар добавлен'),
+            400: OpenApiResponse(description='Превышен остаток'),
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = CartItemSerializer(data=request.data)

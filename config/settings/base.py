@@ -31,9 +31,7 @@ DEBUG = env_bool('DJANGO_DEBUG', default=False)
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
-    raise ImproperlyConfigured(
-        'DJANGO_SECRET_KEY не задан. Укажите его в .env или переменных окружения.'
-    )
+    raise ImproperlyConfigured('DJANGO_SECRET_KEY не задан. Укажите его в .env или переменных окружения.')
 
 INSTALLED_APPS = [
     'django.contrib.admin',

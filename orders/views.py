@@ -128,9 +128,9 @@ class OrderCreateView(LoginRequiredMixin, View):
         if form.is_valid():
             # Формируем снимок данных доставки
             full_shipping_info = (
-                f"{form.cleaned_data['full_name']}, "
-                f"Тел: {form.cleaned_data['phone']}\n"
-                f"{form.cleaned_data['shipping_address']}"
+                f'{form.cleaned_data["full_name"]}, '
+                f'Тел: {form.cleaned_data["phone"]}\n'
+                f'{form.cleaned_data["shipping_address"]}'
             )
             serializer_payload = {
                 'shipping_address': full_shipping_info,

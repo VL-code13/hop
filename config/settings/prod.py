@@ -5,13 +5,9 @@ from .base import *
 DEBUG = env_bool('DJANGO_DEBUG', default=False)  # в prod False по умолчанию
 if DEBUG and not env_bool('ALLOW_DEBUG_IN_PROD', default=False):
     raise ImproperlyConfigured(
-        'DEBUG=True с config.settings.prod. '
-        'Установите DJANGO_DEBUG=False или ALLOW_DEBUG_IN_PROD=1 (для отладки).'
+        'DEBUG=True с config.settings.prod. Установите DJANGO_DEBUG=False или ALLOW_DEBUG_IN_PROD=1 (для отладки).'
     )
-ALLOWED_HOSTS = [
-    h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', 'example.com').split(',')
-    if h.strip()
-]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', 'example.com').split(',') if h.strip()]
 WHITENOISE_MANIFEST_STRICT = not DEBUG
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases

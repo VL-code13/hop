@@ -17,16 +17,19 @@ from .models import PaymentTransaction
 
 class PaymentError(Exception):
     """Базовое исключение ошибок платежного сервиса."""
+
     pass
 
 
 class OrderAlreadyPaidError(PaymentError):
     """Заказ уже был успешно оплачен ранее."""
+
     pass
 
 
 class InvalidOrderStateError(PaymentError):
     """Заказ находится в статусе, недоступном для оплаты (например, отменен)."""
+
     pass
 
 
@@ -48,13 +51,13 @@ class PaymentService:
         try:
             order = Order.objects.get(id=order_id, user=user)
         except Order.DoesNotExist as err:
-            raise ObjectDoesNotExist(f"Заказ #{order_id} не найден.") from err
+            raise ObjectDoesNotExist(f'Заказ #{order_id} не найден.') from err
 
         if order.status == Order.Status.PAID:
-            raise OrderAlreadyPaidError(f"Заказ #{order.id} уже оплачен.")
+            raise OrderAlreadyPaidError(f'Заказ #{order.id} уже оплачен.')
 
         if order.status == Order.Status.CANCELLED:
-            raise InvalidOrderStateError(f"Заказ #{order.id} отменен и не может быть оплачен.")
+            raise InvalidOrderStateError(f'Заказ #{order.id} отменен и не может быть оплачен.')
 
         return order
 
@@ -73,16 +76,13 @@ class PaymentService:
         при повторных кликах пользователя.
         """
         # Блокируем строку заказа от параллельных модификаций
-        locked_order = (
-            Order.objects.select_for_update()
-            .get(id=order.id)
-        )
+        locked_order = Order.objects.select_for_update().get(id=order.id)
 
         if locked_order.status == Order.Status.PAID:
-            raise OrderAlreadyPaidError(f"Заказ #{locked_order.id} уже оплачен.")
+            raise OrderAlreadyPaidError(f'Заказ #{locked_order.id} уже оплачен.')
 
         if locked_order.status == Order.Status.CANCELLED:
-            raise InvalidOrderStateError(f"Заказ #{locked_order.id} отменен.")
+            raise InvalidOrderStateError(f'Заказ #{locked_order.id} отменен.')
 
         # Валидируем метод оплаты по белому списку модели
         valid_methods = [choice[0] for choice in PaymentTransaction.Method.choices]
@@ -90,11 +90,7 @@ class PaymentService:
             payment_method = PaymentTransaction.Method.CARD
 
         # Определяем статус эмуляции
-        tx_status = (
-            PaymentTransaction.Status.SUCCESS
-            if simulate_success
-            else PaymentTransaction.Status.FAILED
-        )
+        tx_status = PaymentTransaction.Status.SUCCESS if simulate_success else PaymentTransaction.Status.FAILED
 
         # Создаем запись финансовой транзакции
         payment = PaymentTransaction.objects.create(

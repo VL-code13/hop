@@ -121,9 +121,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             # 1. Блокируем строки покупаемых товаров в БД
             product_ids = [item['product'].id for item in cart]
-            locked_products = {
-                p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)
-            }
+            locked_products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
 
             # 2. Повторная проверка остатков в заблокированном состоянии
             for item in cart:

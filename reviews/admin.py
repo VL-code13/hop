@@ -4,7 +4,6 @@
 Реализует требования раздела 3.6 ТЗ («Управление отзывами, фильтры, поиск»).
 """
 
-
 from django.contrib import admin
 
 from .models import Review

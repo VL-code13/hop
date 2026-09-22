@@ -43,34 +43,26 @@ router.register(r'orders', OrderViewSet, basename='api-orders')
 urlpatterns = [
     # 1. Панель администратора
     path('admin/', custom_admin_site.urls),
-
     # 2. Пользователи и аутентификация (веб-интерфейс, раздел 3.5 ТЗ)
     path('users/', include('users.urls', namespace='users')),
-
     # 3. Корзина и оформление заказа (веб-интерфейс, разделы 3.3 и 3.4 ТЗ)
     path('', include('orders.urls', namespace='orders')),
-
     # 4. Пользовательские отзывы (веб-интерфейс, раздел 3.2 ТЗ)
     path('reviews/', include('reviews.urls', namespace='reviews')),
-
     # 5. Каталог товаров и витрина (главная страница, раздел 3.1 ТЗ)
     path('', include('products.urls', namespace='products')),
-
     # 6. Эмуляция платежей (раздел 3.4 ТЗ)
     path('payments/', include('payments.urls', namespace='payments')),
-
     # =========================================================================
     # 7. REST API эндпоинты (раздел 3.7 ТЗ)
     # =========================================================================
     path('api/', include(router.urls)),
     path('api/cart/', CartAPIView.as_view(), name='api-cart'),
     path('api/products/<int:product_id>/reviews/', ProductReviewsAPIView.as_view(), name='api-product-reviews'),
-
     # Регистрация и JWT-авторизация в API (раздел 3.7 ТЗ)
     path('api/users/register/', RegisterView.as_view(), name='api-user-register'),
     path('api/users/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
     # =========================================================================
     # 8. Документация OpenAPI / Swagger (раздел 3.8 ТЗ)
     # =========================================================================
