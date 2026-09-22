@@ -13,10 +13,7 @@ from products.models import Product
 from reviews.models import Review
 
 
-def get_review_permissions(
-    user: AbstractBaseUser | AnonymousUser,
-    product: Product,
-) -> tuple[bool, bool]:
+def get_review_permissions(user: AbstractBaseUser | AnonymousUser, product: Product) -> tuple[bool, bool]:
     """Определяет права пользователя на отзыв о конкретном товаре.
 
     Инкапсулирует бизнес-правило раздела 3.2 ТЗ: оставить отзыв может
@@ -41,8 +38,9 @@ def get_review_permissions(
 
     # После проверки is_authenticated пользователь гарантированно
     # авторизован, но django-stubs типизирует request.user как
-    # AbstractBaseUser | AnonymousUser. cast сужает тип для mypy;
-    # User, которую ожидает ForeignKey в фильтрах (issue #561).
+    # AbstractBaseUser | AnonymousUser. cast сужает тип для mypy до
+    # конкретной модели User, которую ожидает ForeignKey в фильтрах
+    # (см. django-stubs issue #561).
     auth_user = cast(AbstractBaseUser, user)
 
     has_existing_review: bool = Review.objects.filter(

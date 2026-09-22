@@ -1,17 +1,19 @@
 """
-Модульные тесты приложения пользователей и профилей.
+Модульные тесты приложения users.
 
 Реализует проверку бизнес-требований по разделам 3.5, 3.7, 4 и 6.3 ТЗ:
 - Аутентификация по Email или Username;
 - Автоматическое создание Profile при регистрации;
 - Обновление контактов и смена пароля в личном кабинете;
 - Мягкое удаление учетной записи (Soft Delete);
-- Получение и обновление JWT-токенов через REST API.
+- Получение и обновление JWT-токенов через REST API;
+- Нормализация телефонов (`users.phone`).
 """
 
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -20,8 +22,12 @@ from rest_framework.test import APIClient
 
 from orders.models import Order
 from users.models import Profile
+from users.phone import format_phone, normalize_phone
 
 User = get_user_model()
+
+
+# ──────────────────────── Web: аутентификация и профиль ────────────────────────
 
 
 class UserAuthenticationAndProfileTestCase(TestCase):
@@ -73,6 +79,19 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         self.assertTrue(new_user.is_active)
         self.assertTrue(Profile.objects.filter(user=new_user).exists())
 
+    def test_registration_rejects_weak_password(self) -> None:
+        """Регистрация с паролем «123» отклоняется (AUTH_PASSWORD_VALIDATORS)."""
+        payload = {
+            'email': 'weakpass@hopbarley.ru',
+            'password1': '123',
+            'password2': '123',
+        }
+        response = self.client.post(reverse('users:register'), data=payload)
+        # Регистрация не прошла — пользователь не создан
+        self.assertFalse(User.objects.filter(email='weakpass@hopbarley.ru').exists())
+        # Страница отрисована с ошибками (200, не редирект)
+        self.assertEqual(response.status_code, 200)
+
     def test_account_page_access_restricted_for_anonymous_user(self) -> None:
         """Анонимный пользователь при попытке входа в ЛК перенаправляется на форму логина."""
         response = self.client.get(reverse('users:account'))
@@ -80,7 +99,10 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         self.assertIn(reverse('users:login'), response.url)  # type: ignore
 
     def test_update_profile_contact_data(self) -> None:
-        """Обновление контактов и адреса доставки в личном кабинете."""
+        """Обновление контактов и адреса доставки в личном кабинете.
+
+        Телефон нормализуется в ``+7XXXXXXXXXX`` на уровне формы.
+        """
         self.client.login(username='brewmaster', password='Password123!')
 
         payload: dict[str, Any] = {
@@ -97,11 +119,14 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.last_name, 'Петров')
         self.assertEqual(self.user.email, 'brewmaster_updated@hopbarley.ru')
-        self.assertEqual(self.user.profile.phone, '+7 (999) 111-22-33')
-        self.assertEqual(self.user.profile.default_shipping_address, 'г. Москва, ул. Пивоваров, д. 10, кв. 5')
+        self.assertEqual(self.user.profile.phone, '+79991112233')  # нормализованный
+        self.assertEqual(
+            self.user.profile.default_shipping_address,
+            'г. Москва, ул. Пивоваров, д. 10, кв. 5',
+        )
 
     def test_change_password_in_account(self) -> None:
-        """Смена пароля в личном кабинете с валидацией старого пароля ."""
+        """Смена пароля в личном кабинете с валидацией старого пароля."""
         self.client.login(username='brewmaster', password='Password123!')
 
         payload: dict[str, Any] = {
@@ -116,6 +141,9 @@ class UserAuthenticationAndProfileTestCase(TestCase):
         self.client.logout()
         login_with_new_pass = self.client.login(username='brewmaster', password='BrandNewPassword2026!')
         self.assertTrue(login_with_new_pass)
+
+
+# ──────────────────────── Soft Delete ────────────────────────
 
 
 class UserSoftDeleteTestCase(TestCase):
@@ -149,6 +177,9 @@ class UserSoftDeleteTestCase(TestCase):
         self.assertFalse(login_attempt)
 
         self.assertTrue(Order.objects.filter(id=self.order.id, user=self.user).exists())
+
+
+# ──────────────────────── JWT API ────────────────────────
 
 
 class UserJWTAPITestCase(TestCase):
@@ -199,3 +230,62 @@ class UserJWTAPITestCase(TestCase):
         )
         self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
         self.assertIn('access', refresh_response.data)  # type: ignore
+
+
+# ──────────────────────── Утилиты телефона (pytest-style) ────────────────────────
+#
+# Ниже — обычные pytest-функции, не unittest.TestCase.
+# Это позволяет использовать @pytest.mark.parametrize, недоступный на методах
+# TestCase. БД не используется — тесты работают без фикстуры db и без Django-клиента.
+
+
+class TestNormalizePhone:
+    """Проверки ``normalize_phone`` на всех поддерживаемых форматах ввода."""
+
+    @pytest.mark.parametrize(
+        ('raw', 'expected'),
+        [
+            ('+7 (999) 111-22-33', '+79991112233'),
+            ('+79991112233', '+79991112233'),
+            ('89991112233', '+79991112233'),
+            ('7 999 111 22 33', '+79991112233'),
+            ('9991112233', '+79991112233'),
+            ('', ''),  # пусто → пусто
+            ('   ', ''),  # только пробелы → пусто
+        ],
+    )
+    def test_valid_inputs(self, raw: str, expected: str) -> None:
+        """Корректные форматы нормализуются к ``+7XXXXXXXXXX``."""
+        assert normalize_phone(raw) == expected
+
+    @pytest.mark.parametrize(
+        'raw',
+        [
+            '123',  # слишком короткий
+            '123456789012',  # 12 цифр
+            '99991234567',  # 11 цифр, первая не 7/8
+            '12345678901234',  # 14 цифр
+        ],
+    )
+    def test_invalid_inputs(self, raw: str) -> None:
+        """Некорректные длины и первая цифра → ``ValueError``."""
+        with pytest.raises(ValueError):
+            normalize_phone(raw)
+
+
+class TestFormatPhone:
+    """Проверки ``format_phone`` для отображения в шаблонах."""
+
+    def test_normalized_to_display(self) -> None:
+        """Стандартный формат ``+7XXXXXXXXXX`` → ``+7 (XXX) XXX-XX-XX``."""
+        assert format_phone('+79991112233') == '+7 (999) 111-22-33'
+
+    def test_garbage_passes_through(self) -> None:
+        """Нераспознанная строка возвращается как есть, без исключения."""
+        assert format_phone('garbage') == 'garbage'
+        assert format_phone('') == ''
+
+    def test_already_formatted_still_works(self) -> None:
+        """Если уже отформатировано, функция не должна ломаться (pass-through)."""
+        # +7 (999) 111-22-33 → не матчит ^\+7\d{10}$, возвращается как есть
+        assert format_phone('+7 (999) 111-22-33') == '+7 (999) 111-22-33'

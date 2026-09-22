@@ -7,18 +7,23 @@
 - Сериализация сессионной корзины для API и схемы OpenAPI/Swagger.
 """
 
+import logging
 from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
 from django.core.mail import mail_admins, send_mail
 from django.db import transaction
+from django.db.models import F
+from django.utils import timezone
 from rest_framework import serializers
 
 from products.models import Product
 
 from .cart import Cart
 from .models import Order, OrderItem
+
+logger = logging.getLogger(__name__)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -65,8 +70,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     Инкапсулирует в себе всю ключевую бизнес-логику магазина:
     1. Комплексная валидация корзины и доступных складских остатков.
-    2. Атомарное сохранение заказа с блокировкой строк (select_for_update)
-       во избежание race conditions при одновременных покупках.
+    2. Атомарное сохранение заказа с блокировкой строк (``select_for_update``)
+       и атомарным списанием через ``F('stock') - qty`` во избежание race conditions.
     3. Фиксация цен на момент покупки (price snapshot).
     4. Списание физических остатков товаров со склада.
     5. Очистка сессионной корзины.
@@ -113,17 +118,22 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data: dict[str, Any]) -> Order:
         """
         Создает заказ, позиции чека, списывает остатки и отправляет уведомления.
+
+        Списание остатков выполняется атомарно на уровне БД через
+        ``Product.objects.filter(stock__gte=qty).update(stock=F('stock') - qty)``.
+        Это исключает overselling даже там, где ``select_for_update()``
+        не работает как реальная блокировка (например, на SQLite).
         """
         cart: Cart = validated_data.pop('cart')
         user = self.context['request'].user
         total_price: Decimal = cart.get_total_price()
 
         with transaction.atomic():
-            # 1. Блокируем строки покупаемых товаров в БД
+            # 1. Блокируем строки покупаемых товаров (реальная блокировка на PostgreSQL)
             product_ids = [item['product'].id for item in cart]
             locked_products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
 
-            # 2. Повторная проверка остатков в заблокированном состоянии
+            # 2. Повторная проверка остатков под блокировкой
             for item in cart:
                 p = locked_products.get(item['product'].id)
                 if not p or p.stock < item['quantity']:
@@ -131,7 +141,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                         f'Остаток товара «{item["product"].name}» изменился. Повторите попытку.'
                     )
 
-            # 3. Создаем заголовок заказа
+            # 3. Создаём заголовок заказа
             order = Order.objects.create(
                 user=user,
                 shipping_address=validated_data.get('shipping_address', ''),
@@ -140,17 +150,27 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 status=Order.Status.PENDING,
             )
 
-            # 4. Создаем позиции заказа и уменьшаем остатки на складе
+            # 4. Создаём позиции заказа и списываем остатки атомарно.
+            #    filter(stock__gte=...) + update(F(...)) — один UPDATE-запрос,
+            #    в котором проверка остатка и его уменьшение происходят вместе.
+            #    updated_at задаём вручную: auto_now не срабатывает через .update().
             for item in cart:
                 p = locked_products[item['product'].id]
                 OrderItem.objects.create(
                     order=order,
                     product=p,
-                    price=item['price'],  # фиксируем снимок цены
+                    price=item['price'],  # снимок цены на момент покупки
                     quantity=item['quantity'],
                 )
-                p.stock -= item['quantity']
-                p.save(update_fields=['stock'])
+                updated = Product.objects.filter(
+                    id=p.id,
+                    stock__gte=item['quantity'],
+                ).update(
+                    stock=F('stock') - item['quantity'],
+                    updated_at=timezone.now(),
+                )
+                if not updated:
+                    raise serializers.ValidationError(f'Остаток товара «{p.name}» изменился. Повторите попытку.')
 
         # 5. Очищаем корзину после успешной транзакции
         cart.clear()
@@ -163,9 +183,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def _send_order_notifications(self, order: Order, user: Any) -> None:
         """
         Безопасная отправка транзакционных писем покупателю и администраторам.
+
+        Сбой SMTP не должен откатывать уже созданный заказ, но обязан
+        попасть в лог — иначе о проблеме с почтой никто не узнает.
         """
         try:
-            # Уведомление покупателю
             send_mail(
                 subject=f'Hop & Barley: Заказ #{order.id} принят в обработку',
                 message=(
@@ -179,14 +201,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 recipient_list=[user.email],
                 fail_silently=True,
             )
-            # Оповещение администратора магазина
             mail_admins(
                 subject=f'Новый заказ #{order.id} на сумму {order.total_price} ₽',
                 message=f'Пользователь {user.username} оформил заказ #{order.id}.',
                 fail_silently=True,
             )
         except Exception:
-            pass
+            logger.exception(
+                'Не удалось отправить email-уведомления по заказу #%s',
+                order.id,
+            )
 
 
 class OrderCancelSerializer(serializers.Serializer):
@@ -204,12 +228,18 @@ class OrderCancelSerializer(serializers.Serializer):
         return attrs
 
     def cancel(self) -> Order:
-        """Атомарно возвращает остатки на склад и переводит заказ в статус CANCELLED."""
+        """Атомарно возвращает остатки на склад и переводит заказ в CANCELLED.
+
+        Возврат выполняется атомарным ``F('stock') + qty`` — это исключает
+        lost update, если параллельно тот же товар покупает другой клиент.
+        """
         order: Order = self.context['order']
         with transaction.atomic():
             for item in order.items.select_related('product'):
-                item.product.stock += item.quantity
-                item.product.save(update_fields=['stock'])
+                Product.objects.filter(id=item.product_id).update(
+                    stock=F('stock') + item.quantity,
+                    updated_at=timezone.now(),
+                )
 
             order.status = Order.Status.CANCELLED
             order.save(update_fields=['status'])

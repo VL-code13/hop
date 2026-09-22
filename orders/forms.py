@@ -1,19 +1,11 @@
-"""
-Формы оформления заказов интернет-магазина.
+"""Формы оформления заказов интернет-магазина.
 
 Реализует валидацию контактных данных и адреса доставки по разделу 3.4 ТЗ.
 """
 
-import re
-
 from django import forms
-from django.core.validators import RegexValidator
 
-# Корректное регулярное выражение с экранированием скобок \( и \)
-phone_validator = RegexValidator(
-    regex=r'^(\+7|7|8)?[\s\-]?(?:\([0-9]{3}\)|[0-9]{3})?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
-    message='Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567).',
-)
+from users.phone import normalize_phone, phone_validator
 
 
 class OrderCreateForm(forms.Form):
@@ -68,9 +60,15 @@ class OrderCreateForm(forms.Form):
     )
 
     def clean_phone(self) -> str:
-        """Нормализация номера телефона с удалением нецифровых символов."""
-        phone: str = self.cleaned_data.get('phone', '')
-        digits_only = re.sub(r'\D', '', phone)
-        if len(digits_only) not in (10, 11):
-            raise forms.ValidationError('Номер телефона должен содержать 10 или 11 цифр.')
-        return phone
+        """Валидирует и нормализует телефон к формату ``+7XXXXXXXXXX``.
+
+        Это гарантирует, что в поле ``Order.shipping_address`` попадёт
+        номер в едином формате — удобно для курьера и поиска.
+        """
+        phone: str = self.cleaned_data.get('phone', '').strip()
+        if not phone:
+            return ''
+        try:
+            return normalize_phone(phone)
+        except ValueError as err:
+            raise forms.ValidationError(str(err)) from err

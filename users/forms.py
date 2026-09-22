@@ -1,12 +1,10 @@
-"""
-Формы аутентификации, регистрации и редактирования профиля пользователей.
+"""Формы аутентификации, регистрации и редактирования профиля пользователей.
 
 Реализует требования разделов 3.5 и 3.7 ТЗ интернет-магазина Hop & Barley.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from django import forms
@@ -16,19 +14,15 @@ from django.contrib.auth.forms import (
     PasswordChangeForm,
     PasswordResetForm,
 )
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
 from django.urls import reverse
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 
 from .models import Profile
+from .phone import normalize_phone, phone_validator
 
 User = get_user_model()
-
-phone_validator = RegexValidator(
-    regex=r'^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$',
-    message='Введите корректный номер телефона (например, +7 (999) 123-45-67 или 89991234567).',
-)
 
 
 class UserLoginForm(AuthenticationForm):
@@ -60,7 +54,12 @@ class UserLoginForm(AuthenticationForm):
 class UserRegisterForm(forms.ModelForm):
     """
     Форма регистрации нового пользователя.
-    При обнаружении деактивированного аккаунта предлагает сброс пароля для реактивации.
+
+    Выполняет:
+    - валидацию email (уникальность, реактивация деактивированного аккаунта);
+    - проверку пароля через ``AUTH_PASSWORD_VALIDATORS`` из настроек;
+    - проверку совпадения password1 / password2;
+    - генерацию уникального username из email.
     """
 
     email = forms.EmailField(
@@ -99,6 +98,11 @@ class UserRegisterForm(forms.ModelForm):
         fields = ('email',)
 
     def clean_email(self) -> str:
+        """Валидирует email и, при необходимости, предлагает реактивацию аккаунта.
+
+        Использует ``format_html`` вместо ``mark_safe`` — аргументы
+        экранируются автоматически, что исключает XSS через email.
+        """
         email = self.cleaned_data.get('email', '').strip().lower()
         existing_user = User.objects.filter(email=email).first()
 
@@ -107,17 +111,43 @@ class UserRegisterForm(forms.ModelForm):
                 raise ValidationError('Пользователь с таким email уже зарегистрирован.')
 
             reset_url = reverse('users:password_reset')
-            message = mark_safe(
-                f'Аккаунт с email <b>{email}</b> был ранее деактивирован. '
-                f'Для восстановления доступа и сохранения истории заказов, пожалуйста, '
-                f'<a href="{reset_url}?email={email}" style="color: #e8a84c; text-decoration: underline; font-weight: 600;">'
-                f'восстановите пароль</a>.'
+            message = format_html(
+                'Аккаунт с email <b>{}</b> был ранее деактивирован. '
+                'Для восстановления доступа и сохранения истории заказов, пожалуйста, '
+                '<a href="{}?email={}" '
+                'style="color: #e8a84c; text-decoration: underline; font-weight: 600;">'
+                'восстановите пароль</a>.',
+                email,
+                reset_url,
+                email,
             )
             raise ValidationError(message)
 
         return email
 
+    def clean_password1(self) -> str:
+        """Прогоняет пароль через ``AUTH_PASSWORD_VALIDATORS`` из settings.
+
+        Валидаторы включают:
+        - ``UserAttributeSimilarityValidator`` — сравнение с email/username;
+        - ``MinimumLengthValidator`` — минимум 8 символов;
+        - ``CommonPasswordValidator`` — защита от топовых паролей;
+        - ``NumericPasswordValidator`` — запрет пароля из цифр.
+
+        Без этого вызова пароль ``123`` или ``password`` успешно регистрировался.
+        """
+        p1 = self.cleaned_data.get('password1', '')
+        if p1:
+            # Создаём «фантомного» пользователя с заполненным email, чтобы
+            # UserAttributeSimilarityValidator мог сравнить пароль с email.
+            # self.instance здесь ещё пустой — cleaned_data заполнится позже.
+            email = self.cleaned_data.get('email', '')
+            user = User(email=email)
+            validate_password(p1, user=user)
+        return p1
+
     def clean(self) -> dict[str, Any]:
+        """Проверяет совпадение пароля и его подтверждения."""
         cleaned_data = super().clean() or {}
         p1 = cleaned_data.get('password1')
         p2 = cleaned_data.get('password2')
@@ -128,6 +158,7 @@ class UserRegisterForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, commit: bool = True) -> Any:
+        """Сохраняет пользователя с уникальным username, сгенерированным из email."""
         user = super().save(commit=False)
         email = self.cleaned_data['email']
         user.email = email
@@ -150,6 +181,11 @@ class CustomPasswordResetForm(PasswordResetForm):
     """Форма сброса пароля, разрешающая отправку токена для деактивированных аккаунтов."""
 
     def get_users(self, email: str) -> Any:
+        """Возвращает пользователей по email без фильтра по is_active.
+
+        Это позволяет деактивированному пользователю запросить сброс пароля
+        и реактивировать аккаунт через ``ReactivatePasswordResetConfirmView``.
+        """
         email_field_name = User.get_email_field_name()
         return User._default_manager.filter(**{f'{email_field_name}__iexact': email})
 
@@ -192,14 +228,23 @@ class ProfileUpdateForm(forms.ModelForm):
         }
 
     def clean_phone(self) -> str:
+        """Валидирует и нормализует телефон к формату ``+7XXXXXXXXXX``.
+
+        Пользователь может ввести номер в любой форме — ``+7 (999) ...``,
+        ``8 999 ...``, ``9991234567``. В БД сохраняется единый формат,
+        что упрощает поиск и сравнение. Для отображения используется
+        ``format_phone()`` из ``users.phone``.
+        """
         phone = self.cleaned_data.get('phone', '').strip()
-        if phone:
-            digits_only = re.sub(r'\D', '', phone)
-            if len(digits_only) not in (10, 11):
-                raise ValidationError('Номер телефона должен содержать 10 или 11 цифр.')
-        return phone
+        if not phone:
+            return ''
+        try:
+            return normalize_phone(phone)
+        except ValueError as err:
+            raise ValidationError(str(err)) from err
 
     def save(self, commit: bool = True) -> Any:
+        """Сохраняет пользователя и связанный с ним Profile."""
         user = super().save(commit=commit)
         profile, _ = Profile.objects.get_or_create(user=user)
         profile.phone = self.cleaned_data.get('phone', '')
@@ -210,7 +255,11 @@ class ProfileUpdateForm(forms.ModelForm):
 
 
 class PasswordChangeCustomForm(PasswordChangeForm):
-    """Кастомная форма смены пароля с классами оформления."""
+    """Кастомная форма смены пароля с классами оформления.
+
+    Наследуется от ``PasswordChangeForm`` — Django автоматически применяет
+    ``AUTH_PASSWORD_VALIDATORS`` к новому паролю.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

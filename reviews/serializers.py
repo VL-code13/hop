@@ -12,10 +12,10 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from orders.models import Order
 from products.models import Product
 
 from .models import Review
+from .services import get_review_permissions
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -43,8 +43,10 @@ class ReviewSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """
-        Комплексная валидация бизнес-правил перед публикацией отзыва (раздел 3.2 ТЗ).
+        """Валидация бизнес-правила «отзыв только после покупки» (раздел 3.2 ТЗ).
+
+        Делегирует проверку в ``reviews.services.get_review_permissions``,
+        чтобы правило жило в одном месте и переиспользовалось в web и API.
         """
         request = self.context.get('request')
         product = self.context.get('product')
@@ -52,29 +54,12 @@ class ReviewSerializer(serializers.ModelSerializer):
         if not request or not product:
             raise ValidationError('Отсутствует контекст запроса или целевой товар.')
 
-        user = request.user
-        if not user.is_authenticated:
-            raise PermissionDenied('Оставлять отзывы могут только авторизованные пользователи.')
+        can_review, has_existing_review = get_review_permissions(request.user, product)
 
-        # Бизнес-правило 1: проверка факта покупки и оплаты товара
-        has_purchased: bool = Order.objects.filter(
-            user=user,
-            items__product=product,
-            status__in=[Order.Status.PAID, Order.Status.DELIVERED],
-        ).exists()
-
-        if not has_purchased:
-            # Выбрасываем PermissionDenied для возврата 403 Forbidden по ТЗ
-            raise PermissionDenied('Оставить отзыв можно только на товар, который вы приобрели и оплатили.')
-
-        # Бизнес-правило 2: проверка на повторный отзыв (UniqueConstraint)
-        # Исключаем текущий объект при обновлении (если когда-то понадобится редактирование)
-        existing_review = Review.objects.filter(product=product, user=user)
-        if self.instance:
-            existing_review = existing_review.exclude(pk=self.instance.pk)
-
-        if existing_review.exists():
+        if has_existing_review:
             raise ValidationError('Вы уже оставляли отзыв на данный товар.')
+        if not can_review:
+            raise PermissionDenied('Оставить отзыв можно только на товар, который вы приобрели и оплатили.')
 
         return attrs
 
