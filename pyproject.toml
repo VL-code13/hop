@@ -16,7 +16,7 @@ authors = [
     {name = "VL-code13", email = "v79260574744@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "django==6.1.1",
     "djangorestframework==3.18.0",
@@ -27,6 +27,8 @@ dependencies = [
     "python-dotenv==1.2.3",
     "pillow==12.3.0",
     "whitenoise==6.12.0",
+    "strawberry-graphql (>=0.327.7,<0.328.0)",
+    "strawberry-graphql-django (>=0.89.2,<0.90.0)",
 ]
 
 # ─── Dev-зависимости ───
