@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',  # JWT аутентификация по ТЗ
     'drf_spectacular',
     'django_filters',
-    'strawberry_django', # интеграция Strawberry c Django ORM
+    'strawberry_django',  # интеграция Strawberry c Django ORM
     # Приложения проекта
     'products',
     'orders',
