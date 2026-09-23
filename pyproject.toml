@@ -52,7 +52,7 @@ line-length = 120
 exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4"]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "F811"]
 ignore = ["E501", "B008"]
 
 [tool.ruff.lint.isort]
