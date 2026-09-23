@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16
     container_name: hop_and_barley_db
-    restart: always
+    restart: unless-stopped              # ← было: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hopbarley}
       POSTGRES_USER: ${POSTGRES_USER:-user}
@@ -20,8 +20,11 @@ services:
   web:
     build: .
     container_name: hop_and_barley_web
-    restart: always
+    restart: unless-stopped
+    # Для DEV — runserver (авто-перезагрузка при изменении кода).
     command: python manage.py runserver 0.0.0.0:8000
+    # Для PROD раскомментируй строку ниже и закомментируй runserver:
+    # command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
     volumes:
       - .:/app
     ports:
@@ -31,6 +34,8 @@ services:
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      # Явно переопределяем: контейнер работает на PostgreSQL, не на SQLite.
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
     depends_on:
       db:
         condition: service_healthy

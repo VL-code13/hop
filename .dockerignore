@@ -1,41 +1,59 @@
+# ─── Python ───
 __pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ─── Django ───
+db.sqlite3
+*.sqlite3
 media/
 staticfiles/
-*pyc
-venv/
 
-# Система контроля версий
-.git/
-.gitignore
-.gitattributes
+# ─── Тесты и отчёты ───
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.hypothesis/
+.coverage
+tests/
 
-# Зависимости и кэш
-node_modules/
-.npm/
-
-# Файлы окружения и секреты
+# ─── Секреты и локальное окружение ───
 .env
 .env.*
 *.key
 *.pem
 *.p12
 
-# Логи и временные файлы
-*.log
-tmp/
-temp/
-
-# Каталоги сборки
-dist/
-build/
-target/
-out/
-
-# Инструменты разработки
+# ─── Инструменты разработки ───
+.git/
+.github/
+.gitignore
+.gitattributes
 .vscode/
 .idea/
 *.swp
+poetry.toml
 
-# Специфичные для ОС файлы
+# ─── Docker и CI ───
+Dockerfile
+Dockerfile.*
+docker-compose.yml
+docker-compose.yaml
+.dockerignore
+
+# ─── Документация ───
+README.md
+CONTRIBUTING.md
+LICENSE
+
+# ─── ОС ───
 .DS_Store
 Thumbs.db
