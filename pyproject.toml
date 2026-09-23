@@ -43,6 +43,7 @@ dev = [
     "django-stubs[compatible-mypy]==6.1.1",
     "djangorestframework-stubs==3.18.1",
     "types-pyyaml==6.0.12.20260906",
+    "pre-commit (>=4.6.2,<5.0.0)",
 ]
 
 # ─── Ruff ───
