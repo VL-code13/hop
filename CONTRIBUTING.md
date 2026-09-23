@@ -8,6 +8,7 @@
 - [Настройка окружения](#настройка-окружения)
 - [Git workflow](#git-workflow)
 - [Стандарты кода](#стандарты-кода)
+- [Pre-commit hooks](#pre-commit-hooks)
 - [Управление зависимостями (Poetry)](#управление-зависимостями-poetry)
 - [Тестирование](#тестирование)
 - [Коммиты](#коммиты)
@@ -56,18 +57,22 @@ cd hop
 # 2. Установить все зависимости (main + dev)
 poetry install
 
-# 3. Создать .env из шаблона
+# 3. Установить git-хуки (pre-commit + pre-push)
+poetry run pre-commit install
+poetry run pre-commit install --hook-type pre-push
+
+# 4. Создать .env из шаблона
 cp .env.example .env
 # Отредактируйте DJANGO_SECRET_KEY:
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
-# 4. Применить миграции
+# 5. Применить миграции
 poetry run python manage.py migrate
 
-# 5. Создать администратора
+# 6. Создать администратора
 poetry run python manage.py createsuperuser
 
-# 6. Запустить сервер разработки
+# 7. Запустить сервер разработки
 poetry run python manage.py runserver
 ```
 
@@ -234,6 +239,89 @@ def decorator[F: Callable[..., Any]](func: F) -> F: ...
 
 ---
 
+## Pre-commit hooks
+
+Проект использует `pre-commit` для автоматического запуска линтеров, форматтеров и тестов **до коммита и push**. Это страхует от мелочей, на которых обычно падает CI: пробелы, порядок импортов, забытые тесты.
+
+### Установка
+
+После клонирования и `poetry install`:
+
+```bash
+poetry run pre-commit install
+poetry run pre-commit install --hook-type pre-push
+```
+
+Первая команда — устанавливает `pre-commit` хук (запускается на `git commit`).
+Вторая — `pre-push` хук (запускается на `git push`, гоняет mypy и pytest).
+
+Один раз на клонирование. Дальше работает автоматически.
+
+### Что запускается
+
+**На `git commit`** — быстрые хуки:
+
+- `trailing-whitespace`, `end-of-file-fixer`, `mixed-line-ending` — чистка файлов;
+- `check-yaml`, `check-toml` — синтаксис конфигов;
+- `check-added-large-files`, `check-merge-conflict`, `detect-private-key` — защита;
+- `ruff --fix` — линтер с автоисправлениями;
+- `ruff-format` — форматтер.
+
+**На `git push`** — тяжёлые проверки:
+
+- `mypy .` — статическая типизация;
+- `pytest --ds=config.settings.test --no-cov -q` — быстрые тесты.
+
+### Ручной запуск
+
+```bash
+# Прогнать хуки на staged-файлах (как при коммите)
+poetry run pre-commit run
+
+# Прогнать на всех файлах проекта
+poetry run pre-commit run --all-files
+```
+
+### Если хук поправил файлы
+
+`ruff --fix`, `ruff-format`, `end-of-file-fixer` и `trailing-whitespace` **изменяют файлы**. Git прервёт коммит. Это нормально:
+
+```bash
+git add .                        # добавить изменения от хуков
+git commit -m "..."              # повторить
+```
+
+На второй попытке хуки пройдут без правок.
+
+### Пропустить проверку (экстренно)
+
+```bash
+# Пропустить pre-commit для одного коммита
+git commit --no-verify -m "..."
+
+# Пропустить pre-push
+git push --no-verify
+```
+
+**Не используй без необходимости.** Если CI обязателен — пропуск локальных хуков не поможет, просто найдёшь проблему позже.
+
+### Обновление версий хуков
+
+Раз в пару месяцев:
+
+```bash
+poetry run pre-commit autoupdate
+```
+
+Обновит `rev:` во всех репозиториях до последних версий. Затем:
+
+```bash
+git add .pre-commit-config.yaml
+git commit -m "chore(ci): обновить pre-commit hooks"
+```
+
+---
+
 ## Управление зависимостями (Poetry)
 
 Проект использует **Poetry 2.x** с PEP 621 манифестом (`[project]`) и PEP 735 группами (`[dependency-groups]`).
@@ -254,6 +342,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest==9.1.1",
+    "pre-commit==4.0.1",
     ...
 ]
 
@@ -442,6 +531,10 @@ fix(graphql): квантизовать Decimal до 2 знаков в денеж
 test(graphql): покрыть права доступа и orderMetrics
 test(graphql): покрыть кеш метрик и порядок проверки прав
 docs(readme): описать схему и примеры запросов в README
+
+# Pre-commit
+chore: настроить pre-commit hooks
+chore(ci): обновить pre-commit hooks
 ```
 
 ### Примеры плохих коммитов
@@ -495,6 +588,7 @@ git rebase origin/dev_3st_week
 ## Как проверено
 
 - [ ] Написаны/обновлены тесты
+- [ ] `poetry run pre-commit run --all-files` — зелёный
 - [ ] `poetry run ruff check .` — зелёный
 - [ ] `poetry run ruff format --check .` — зелёный
 - [ ] `poetry run mypy .` — зелёный
@@ -518,6 +612,12 @@ Closes #<номер issue>
 
 ## Чек-лист перед push
 
+С включёнными pre-commit hook'ами большая часть проверок идёт **автоматически**. Ручной прогон нужен, если:
+
+- ты только что клонировал репозиторий и не установил хуки,
+- хочешь убедиться перед push,
+- CI требует этих проверок в явном виде.
+
 ```bash
 # 1. Линтер
 poetry run ruff check .
@@ -540,6 +640,8 @@ poetry run pytest --ds=config.settings.test
 ```
 
 Если **все шесть** зелёные — можно пушить.
+
+**Про pre-commit:** если хуки установлены, шаги 1, 2 и 6 выполняются автоматически при коммите и push. Явный прогон нужен только для дополнительной уверенности.
 
 ### Полная симуляция CI
 
@@ -615,6 +717,7 @@ Traceback (most recent call last):
 - [PEP 621](https://peps.python.org/pep-0621/) — метаданные проекта
 - [PEP 735](https://peps.python.org/pep-0735/) — dependency groups
 - [PEP 695](https://peps.python.org/pep-0695/) — параметризованные функции и классы
+- [pre-commit docs](https://pre-commit.com/) — фреймворк git-хуков
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)
 - [DRF docs](https://www.django-rest-framework.org/)
