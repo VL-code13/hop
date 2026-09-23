@@ -6,9 +6,10 @@
 Sum / Count / Avg / Trunc. Никаких питоновских переборов заказов.
 """
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Final
+from typing import Any, Final
 
 import strawberry
 from django.db.models import Avg, Count, Sum
@@ -35,7 +36,7 @@ DEFAULT_PERIOD_DAYS: Final[int] = 30
 DEFAULT_INTERVAL: Final[str] = 'day'
 
 
-def _resolve_interval(interval: str) -> object:
+def _resolve_interval(interval: str) -> Callable[..., Any]:
     """Преобразует строковый шаг в Trunc-функцию Django.
 
     Args:
@@ -47,15 +48,15 @@ def _resolve_interval(interval: str) -> object:
     Raises:
         ValueError: Если шаг неизвестен.
     """
-    mapping = {'day': TruncDate, 'week': TruncWeek, 'month': TruncMonth}
+    mapping: dict[str, Callable[..., Any]] = {'day': TruncDate, 'week': TruncWeek, 'month': TruncMonth}
     if interval not in mapping:
         raise ValueError(f'Неизвестный шаг агрегации: {interval!r}. Допустимо: {list(mapping)}.')
     return mapping[interval]
 
 
 def _resolve_date_range(
-        date_from: date | None,
-        date_to: date | None,
+    date_from: date | None,
+    date_to: date | None,
 ) -> tuple[date, date]:
     """Нормализует входной диапазон дат.
 
@@ -88,12 +89,12 @@ class OrderAnalyticsQuery:
 
     @strawberry.field
     @staff_only
-    @cache_metric(ttl=300,prefix='orders')  # 5 minutes
+    @cache_metric(ttl=300, prefix='orders')  # 5 minutes
     def order_metrics(
-            self,
-            info: Info,
-            date_from: date | None = None,
-            date_to: date | None = None,
+        self,
+        info: Info,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> OrderMetrics:
         """Сводные метрики заказов за период.
 
@@ -158,11 +159,11 @@ class OrderAnalyticsQuery:
     @staff_only
     @cache_metric(ttl=300, prefix='orders')
     def order_trends(
-            self,
-            info: Info,
-            date_from: date | None = None,
-            date_to: date | None = None,
-            interval: str = DEFAULT_INTERVAL,
+        self,
+        info: Info,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        interval: str = DEFAULT_INTERVAL,
     ) -> OrderTrends:
         """Динамика заказов по интервалам.
 

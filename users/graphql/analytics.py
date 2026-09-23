@@ -6,9 +6,10 @@
 Это ключевая метрика удержания: рост доли повторных = продукт нравится.
 """
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Final
+from typing import Any, Final
 
 import strawberry
 from django.contrib.auth import get_user_model
@@ -37,7 +38,7 @@ REPEAT_THRESHOLD: Final[int] = 2
 DEFAULT_PERIOD_DAYS: Final[int] = 30
 
 
-def _resolve_interval(interval: str) -> object:
+def _resolve_interval(interval: str) -> Callable[..., Any]:
     """Преобразует строку в Trunc-функцию для группировки по датам.
 
     Args:
@@ -49,7 +50,9 @@ def _resolve_interval(interval: str) -> object:
     Raises:
         ValueError: Если шаг неизвестен.
     """
-    mapping = {'day': TruncDate, 'week': TruncWeek, 'month': TruncMonth}
+    # ← mypy: возвращаемый тип object не callable. Callable[..., Any]
+    #   позволяет вызвать результат как trunc('created_at').
+    mapping: dict[str, Callable[..., Any]] = {'day': TruncDate, 'week': TruncWeek, 'month': TruncMonth}
     if interval not in mapping:
         raise ValueError(f'Неизвестный шаг: {interval!r}.')
     return mapping[interval]
@@ -84,10 +87,10 @@ class UserAnalyticsQuery:
     @staff_only
     @cache_metric(ttl=300, prefix='users')
     def user_activity(
-            self,
-            info: Info,
-            date_from: date | None = None,
-            date_to: date | None = None,
+        self,
+        info: Info,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> UserActivityMetrics:
         """Сводные метрики активности и удержания.
 
@@ -141,11 +144,11 @@ class UserAnalyticsQuery:
     @staff_only
     @cache_metric(ttl=600, prefix='users')
     def repeat_purchase_trend(
-            self,
-            info: Info,
-            date_from: date | None = None,
-            date_to: date | None = None,
-            interval: str = 'month',
+        self,
+        info: Info,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        interval: str = 'month',
     ) -> list[TrendPoint]:  # ← убраны кавычки и # type: ignore
         """Динамика повторных покупок по интервалам.
 

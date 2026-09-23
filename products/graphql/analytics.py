@@ -91,7 +91,7 @@ class ProductAnalyticsQuery:
                 continue
             result.append(
                 PopularProduct(
-                    product=product,
+                    product=product,  # type: ignore[arg-type]
                     units_sold=row['units_sold'],
                     revenue=row['revenue'].quantize(Decimal('0.01')),
                 )
@@ -131,7 +131,7 @@ class ProductAnalyticsQuery:
 
         return [
             StockStatus(
-                product=product,  # ← передаём модель, Strawberry конвертирует сам
+                product=product,  # type: ignore[arg-type] # ← передаём модель, Strawberry конвертирует сам
                 stock=product.stock,
                 threshold=threshold,
                 deficit=threshold - product.stock,
@@ -159,7 +159,7 @@ class ProductAnalyticsQuery:
 
         return [
             StockStatus(
-                product=product,
+                product=product,  # type: ignore[arg-type]
                 stock=0,
                 threshold=DEFAULT_LOW_STOCK_THRESHOLD,
                 # Для нулевого остатка deficit = сам порог, ведь дефицит

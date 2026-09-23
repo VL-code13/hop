@@ -16,7 +16,7 @@ from django.http import HttpRequest, HttpResponse
 from strawberry.django.views import GraphQLView
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import User
+    from django.contrib.auth.models import AnonymousUser, User
 
 
 @dataclass
@@ -33,7 +33,7 @@ class GraphQLContext:
     _cache: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @property
-    def user(self) -> 'User':
+    def user(self) -> 'User | AnonymousUser':
         """Текущий пользователь.
 
         Достаётся из request.user, который установлен либо Django-сессией,
@@ -42,6 +42,8 @@ class GraphQLContext:
         Returns:
             Экземпляр User (или AnonymousUser, если не аутентифицирован).
         """
+        # ← mypy: request.user возвращает User | AnonymousUser,
+        #   а не только User. Расширили возвращаемый тип.
         return self.request.user
 
     def cache_get(self, key: str) -> Any:
@@ -61,7 +63,9 @@ class HopBarleyGraphQLView(GraphQLView):
     get_context — именно этот метод вызывается в начале каждого запроса.
     """
 
-    def get_context(self, request: HttpRequest, response: HttpResponse) -> GraphQLContext:
+    # ← mypy: родительский GraphQLView.get_context возвращает None в stubs.
+
+    def get_context(self, request: HttpRequest, response: HttpResponse) -> GraphQLContext:  # type: ignore[override] # подавляет несовместимость сигнатур.
         """Формирует контекст для текущего GraphQL-запроса.
 
         Args:

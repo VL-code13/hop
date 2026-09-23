@@ -21,7 +21,7 @@ def test_order_metrics_cached_between_requests(
     staff_token: str,
     order_factory,
 ) -> None:
-    """Повторный запрос с теми же параметрами возвращает кешированный результат.
+    """Повторный запрос с теми же параметрами возвращает закешированный результат.
 
     Сценарий:
         1. Создаём 1 оплаченный заказ, дёргаем orderMetrics — MISS, count=1.
@@ -36,24 +36,39 @@ def test_order_metrics_cached_between_requests(
     client = Client()
     url = '/graphql/'
     query = '{"query": "{ orderMetrics { orderCount } }"}'
-    headers = {'HTTP_AUTHORIZATION': f'Bearer {staff_token}'}
+    auth = f'Bearer {staff_token}'
 
     # 1. MISS — идёт в БД, кеширует результат.
-    first = client.post(url, data=query, content_type='application/json', **headers)
+    first = client.post(
+        url,
+        data=query,
+        content_type='application/json',
+        HTTP_AUTHORIZATION=auth,
+    )
     assert first.json()['data']['orderMetrics']['orderCount'] == 1
 
     # 2. Создаём ещё один заказ. В БД теперь 2, но кеш об этом не знает.
     order_factory(status='paid')
 
     # 3. HIT — возвращает старое значение из кеша (1, не 2).
-    second = client.post(url, data=query, content_type='application/json', **headers)
+    second = client.post(
+        url,
+        data=query,
+        content_type='application/json',
+        HTTP_AUTHORIZATION=auth,
+    )
     assert second.json()['data']['orderMetrics']['orderCount'] == 1
 
     # 4. Сбрасываем кеш — следующий запрос пойдёт в БД.
     cache.clear()
 
     # 5. MISS — видим актуальные данные.
-    third = client.post(url, data=query, content_type='application/json', **headers)
+    third = client.post(
+        url,
+        data=query,
+        content_type='application/json',
+        HTTP_AUTHORIZATION=auth,
+    )
     assert third.json()['data']['orderMetrics']['orderCount'] == 2
 
 
