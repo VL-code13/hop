@@ -11,6 +11,8 @@
 - **нормализацию телефонов** через `users/phone.py` — единый формат `+7XXXXXXXXXX` в БД;
 - **DRY бизнес-правило отзывов** — «только после покупки» живёт в `reviews/services.py` и переиспользуется в web и API;
 - **кастомную аналитическую панель** с дашбордом, складским контролем и журналом заказов;
+- **GraphQL-эндпоинт** `/graphql/` на Strawberry — единая точка для аналитических запросов по заказам, товарам и пользователям;
+- **кеширование аналитических метрик** через `@cache_metric` — per-resolver TTL, работает на любом Django cache backend;
 - **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
 
 [![CI](https://github.com/VL-code13/hop/actions/workflows/ci.yml/badge.svg?branch=dev_3st_week)](https://github.com/VL-code13/hop/actions/workflows/ci.yml)
@@ -24,6 +26,7 @@
 - [Реализованная бизнес-логика](#реализованная-бизнес-логика)
 - [Спецификация REST API](#спецификация-rest-api)
 - [Примеры запросов с JWT](#примеры-запросов-с-jwt)
+- [GraphQL API](#graphql-api)
 - [Аутентификация и безопасность](#аутентификация-и-безопасность)
 - [OpenAPI и интерактивная документация](#openapi-и-интерактивная-документация)
 - [Тестирование и контроль качества](#тестирование-и-контроль-качества)
@@ -41,12 +44,13 @@
 | Менеджер зависимостей | **Poetry 2.x** | Lockfile, изоляция venv, разделение main/dev |
 | Бэкенд-платформа | Django 6.1.1 | Веб-ядро, ORM, маршрутизация, шаблонизатор, сигналы |
 | REST API | Django REST Framework 3.18 | Сериализация, валидация запросов, ViewSets, permissions |
+| **GraphQL** | **Strawberry GraphQL 0.327 + strawberry-graphql-django 0.89** | **Аналитический эндпоинт `/graphql/`** |
 | JWT-авторизация | djangorestframework-simplejwt 5.5.1 | Выпуск, проверка и ротация Access / Refresh токенов |
 | Схема OpenAPI | drf-spectacular 0.30.0 | Генерация OpenAPI 3.0, интерактивных Swagger UI и ReDoc |
 | Статические файлы | WhiteNoise 6.12 | Раздача сжатой кэшируемой статики с манифестным хешированием |
 | СУБД (Production) | PostgreSQL 16 + psycopg 3.3 | Продакшн-база с поддержкой строгой изоляции транзакций |
 | СУБД (Development) | SQLite | Встроенная база для ускоренной локальной разработки |
-| Тестирование | pytest 9.1 + pytest-django + pytest-cov | Набор из 50+ тестов с автоматическим замером покрытия |
+| Тестирование | pytest 9.1 + pytest-django + pytest-cov | Набор из 67+ тестов с автоматическим замером покрытия |
 | Статический анализ | Ruff 0.16 + Mypy 1.13 + django-stubs | Линтинг по PEP 8 и статическая типизация |
 | Контейнеризация | Docker + Docker Compose | Изоляция сервисов веб-приложения и сервера БД |
 
@@ -61,12 +65,19 @@ hop-and-barley/
 │       └── ci.yml              # GitHub Actions: ruff, mypy, pytest на PostgreSQL
 ├── config/                     # Настройки проекта
 │   ├── settings/
-│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF
+│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF, Strawberry
 │   │   ├── development.py      # SQLite, DEBUG=True, локальная разработка
 │   │   ├── prod.py             # PostgreSQL, security-настройки, строгий WhiteNoise
+│   │   ├── test.py             # SQLite in-memory, MD5-хешер паролей — для pytest
 │   │   └── ci.py               # PostgreSQL, locmem email, для CI и pytest
+│   ├── graphql/                # GraphQL-ядро (не Django-приложение!)
+│   │   ├── cache.py            # @cache_metric — кеширование аналитических резолверов
+│   │   ├── context.py          # GraphQLContext + кастомный HopBarleyGraphQLView
+│   │   ├── middleware.py       # GraphQLJWTAuthMiddleware — аутентификация по JWT
+│   │   ├── permissions.py      # @staff_only — декоратор проверки прав
+│   │   └── schema.py           # Корневая схема: агрегация Query-классов доменов
 │   ├── admin.py                # HopBarleyAdminSite с аналитическим дашбордом
-│   ├── urls.py                 # Центральный диспетчер маршрутов UI и API
+│   ├── urls.py                 # Центральный диспетчер: UI, REST API, /graphql/
 │   ├── wsgi.py
 │   └── asgi.py
 ├── products/                   # Каталог товаров и категорий (раздел 3.1 ТЗ)
@@ -77,6 +88,9 @@ hop-and-barley/
 │   ├── serializers.py          # ProductList/DetailSerializer, CategorySerializer
 │   ├── forms.py                # AddToCartProductForm
 │   ├── admin.py                # Администрирование каталога, actions
+│   ├── graphql/                # GraphQL-слой приложения
+│   │   ├── types.py            # ProductType, CategoryType, PopularProduct, StockStatus
+│   │   └── analytics.py        # popularProducts, lowStock, outOfStock
 │   ├── tests.py                # Тесты витрины, поиска, фильтров
 │   └── tests_services.py       # Тесты сервисного слоя (без HTTP)
 ├── orders/                     # Корзина и заказы (разделы 3.3, 3.4 ТЗ)
@@ -88,6 +102,9 @@ hop-and-barley/
 │   ├── forms.py                # OrderCreateForm + нормализация телефона
 │   ├── context_processors.py   # Инъекция cart в шаблоны
 │   ├── admin.py                # Обработка заказов, аналитика, actions
+│   ├── graphql/
+│   │   ├── types.py            # OrderType, OrderItemType, OrderMetrics, TrendPoint
+│   │   └── analytics.py        # orderMetrics, orderTrends
 │   └── tests.py                # Тесты корзины и списания остатков
 ├── reviews/                    # Отзывы покупателей (раздел 3.2 ТЗ)
 │   ├── models.py               # Review + UniqueConstraint(product, user)
@@ -113,7 +130,18 @@ hop-and-barley/
 │   ├── forms.py                # Формы входа, регистрации, профиля
 │   ├── views.py                # ЛК, смена пароля, soft delete, реактивация
 │   ├── admin.py                # Инлайн профиля
+│   ├── graphql/
+│   │   ├── types.py            # UserType, UserActivityMetrics
+│   │   ├── queries.py          # me — публичный резолвер текущего пользователя
+│   │   └── analytics.py        # userActivity, repeatPurchaseTrend, customerLifetimeValue
 │   └── tests.py                # Аутентификация, JWT, soft delete, phone
+├── tests/                      # Интеграционные тесты, не привязанные к приложению
+│   └── graphql/                # Тесты GraphQL-эндпоинта
+│       ├── test_permissions.py       # Аноним / FORBIDDEN / staff / health
+│       ├── test_order_analytics.py   # orderMetrics, orderTrends
+│       ├── test_product_analitics.py # lowStockProducts, popularProducts
+│       ├── test_user_queries.py      # me, аналитика пользователей
+│       └── test_cache.py             # кеширование метрик + порядок проверки прав
 ├── templates/                  # Шаблоны оформления
 ├── static/                     # CSS, JS, изображения
 ├── .coveragerc                 # Правила исключений для coverage
@@ -124,7 +152,7 @@ hop-and-barley/
 ├── pyproject.toml              # Poetry + Ruff + Mypy (единый конфиг)
 ├── poetry.lock                 # Зафиксированные версии зависимостей
 ├── pytest.ini                  # Конфигурация pytest
-├── conftest.py                 # Глобальные pytest-фикстуры
+├── conftest.py                 # Глобальные pytest-фикстуры (включая JWT и _clear_cache)
 ├── manage.py
 └── README.md
 ```
@@ -184,6 +212,7 @@ poetry run python manage.py runserver
 ```
 
 Приложение: http://127.0.0.1:8000/
+GraphiQL (интерактивный GraphQL-клиент): http://127.0.0.1:8000/graphql/
 
 > **Совет:** активируйте виртуальное окружение Poetry командой `poetry shell` — тогда `python`, `pytest`, `ruff` будут работать без префикса `poetry run`.
 
@@ -218,8 +247,10 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 |--------|-----|
 | Каталог магазина | http://localhost:8080/ |
 | Админ-панель с аналитикой | http://localhost:8080/admin/ |
+| REST API | http://localhost:8080/api/ |
 | Swagger UI | http://localhost:8080/api/docs/ |
 | ReDoc | http://localhost:8080/api/redoc/ |
+| **GraphiQL (GraphQL IDE)** | **http://localhost:8080/graphql/** |
 
 ---
 
@@ -228,7 +259,7 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 | Переменная | Обязательна | По умолчанию | Назначение |
 |------------|:-----------:|--------------|------------|
 | `DJANGO_SECRET_KEY` | **Да** | — | Секретный ключ. Без него — `ImproperlyConfigured`. |
-| `DJANGO_SETTINGS_MODULE` | Нет | `config.settings.development` | Какой конфиг использовать: `development`, `prod`, `ci`. |
+| `DJANGO_SETTINGS_MODULE` | Нет | `config.settings.development` | Какой конфиг использовать: `development`, `prod`, `ci`, `test`. |
 | `DJANGO_DEBUG` | Нет | `True` (dev) / `False` (prod) | В `prod.py` guard: `DEBUG=True` разрешён только с `ALLOW_DEBUG_IN_PROD=1`. |
 | `DJANGO_ALLOWED_HOSTS` | Нет | `*` (dev) / `example.com` (prod) | Список доверенных хостов через запятую. |
 | `POSTGRES_DB` | Для prod/ci | `hopbarley` / `test_db` | Имя базы. |
@@ -410,6 +441,214 @@ curl -X POST http://localhost:8080/api/token/refresh/ \
 
 ---
 
+## GraphQL API
+
+Эндпоинт `/graphql/` реализован на **Strawberry GraphQL** — type-safe альтернативе Graphene с нативной интеграцией с Django ORM через `strawberry-graphql-django`. Раздел 3.9 ТЗ (бонус).
+
+### Возможности
+
+Аналитический слой по трём направлениям:
+
+- **Заказы**: выручка, количество, средний чек, уникальные клиенты, тренды по интервалам.
+- **Продукты**: популярные товары (по продажам), низкие остатки, товары с нулевым остатком.
+- **Пользователи**: активность (новые / активные / повторные), динамика повторных покупок, LTV конкретного клиента.
+
+Дополнительно:
+
+- `health` — публичная проверка живости эндпоинта.
+- `me` — публичный резолвер профиля текущего пользователя.
+
+### Архитектура
+
+- `config/graphql/schema.py` — корневая схема, собирает Query-классы из доменов.
+- `config/graphql/context.py` — `GraphQLContext` (доступ к `request.user` и per-request кешу) + кастомный `HopBarleyGraphQLView`, переопределяющий `get_context`.
+- `config/graphql/middleware.py` — `GraphQLJWTAuthMiddleware`, читает JWT из заголовка `Authorization: Bearer ...` для путей `/graphql/`.
+- `config/graphql/permissions.py` — декоратор `@staff_only`, бросает `GraphQLError` с `extensions.code` (`UNAUTHENTICATED` / `FORBIDDEN`).
+- `config/graphql/cache.py` — декоратор `@cache_metric`, кеширует результаты тяжёлых аналитических резолверов с per-resolver TTL.
+- `<app>/graphql/types.py` — GraphQL-типы, привязанные к Django-моделям через `@strawberry_django.type`.
+- `<app>/graphql/analytics.py` — резолверы аналитических запросов.
+
+### Аутентификация
+
+Используется **тот же JWT** от `rest_framework_simplejwt`, что и для REST API. После логина через `/api/users/login/` клиент передаёт токен в заголовке:
+
+```
+Authorization: Bearer <access_token>
+```
+
+`GraphQLJWTAuthMiddleware` перехватывает запросы к `/graphql/`, проверяет подпись и срок действия, и подставляет `request.user`. Если токен отсутствует или невалиден — пользователь остаётся `AnonymousUser`.
+
+### Права доступа
+
+| Резолвер | Гость | Обычный юзер | Staff |
+|----------|:-----:|:------------:|:-----:|
+| `health` | ✅ | ✅ | ✅ |
+| `me` | `null` | ✅ | ✅ |
+| `orderMetrics`, `orderTrends` | ❌ UNAUTHENTICATED | ❌ FORBIDDEN | ✅ |
+| `popularProducts`, `lowStockProducts`, `outOfStockProducts` | ❌ | ❌ | ✅ |
+| `userActivity`, `repeatPurchaseTrend`, `customerLifetimeValue` | ❌ | ❌ | ✅ |
+
+Проверка прав выполняется в декораторе `@staff_only` — **до** тела резолвера, поэтому неавторизованные запросы не нагружают БД.
+
+### Примеры запросов
+
+#### Проверка живости
+
+```graphql
+{
+  health
+}
+```
+
+#### Дашборд заказов
+
+```graphql
+query OrdersDashboard {
+  orderMetrics(dateFrom: "2026-08-01", dateTo: "2026-09-01") {
+    totalRevenue
+    orderCount
+    averageOrderValue
+    uniqueCustomers
+    cancelledCount
+  }
+
+  orderTrends(
+    dateFrom: "2026-08-01"
+    dateTo: "2026-09-01"
+    interval: "week"
+  ) {
+    revenue { period value }
+    orders { period value }
+    averageOrderValue { period value }
+  }
+}
+```
+
+#### Товарная аналитика
+
+```graphql
+query ProductsAnalytics {
+  popularProducts(limit: 5) {
+    product { id name price }
+    unitsSold
+    revenue
+  }
+
+  lowStockProducts(threshold: 10) {
+    product { id name stock }
+    stock
+    deficit
+  }
+
+  outOfStockProducts {
+    product { id name }
+    stock
+  }
+}
+```
+
+#### Пользовательская аналитика
+
+```graphql
+query UsersAnalytics {
+  userActivity(dateFrom: "2026-08-01") {
+    newUsers
+    activeBuyers
+    repeatBuyers
+    repeatPurchaseRate
+    ordersPerBuyer
+  }
+
+  repeatPurchaseTrend(interval: "month") {
+    period
+    value
+  }
+
+  customerLifetimeValue(userId: "42")
+}
+```
+
+#### Текущий пользователь
+
+```graphql
+{
+  me {
+    id
+    username
+    email
+  }
+}
+```
+
+### Как передать токен в GraphiQL
+
+1. Открой http://127.0.0.1:8000/graphql/
+2. Получите access-токен через REST: `POST /api/users/login/`
+3. В GraphiQL внизу страницы раскройте панель **«Headers»**
+4. Вставьте:
+
+```json
+{
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+### Проверка через curl
+
+```bash
+# Health (без токена)
+curl -X POST http://localhost:8000/graphql/ \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ health }"}'
+
+# Аналитика (staff-токен)
+curl -X POST http://localhost:8000/graphql/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ACCESS" \
+  -d '{"query": "{ orderMetrics { totalRevenue orderCount } }"}'
+```
+
+### Производительность
+
+- **Все агрегаты считаются на стороне БД** — `Sum`, `Count`, `Avg`, `Trunc`, `TruncDate/Week/Month`. Никаких питоновских переборов заказов.
+- **`DjangoOptimizerExtension`** автоматически применяет `select_related` / `prefetch_related` там, где резолверы читают связанные поля.
+- **Индексы под аналитику** — составные индексы по `(status, paid_at)` и `(user, created_at)` для быстрой фильтрации.
+- **Кеширование метрик** через `@cache_metric` с per-resolver TTL:
+  - `out_of_stock_products` — 60 сек (критично для UX),
+  - `low_stock_products` — 120 сек,
+  - `order_metrics`, `order_trends`, `user_activity`, `customer_lifetime_value` — 300 сек,
+  - `popular_products`, `repeat_purchase_trend` — 600 сек.
+
+### Кеширование
+
+Кеширование аналитических метрик реализовано в `config/graphql/cache.py` через декоратор `@cache_metric`. Порядок декораторов строго:
+
+```python
+@strawberry.field
+@staff_only              # проверка прав — ДО кеша
+@cache_metric(...)       # кеш — только после успешной проверки
+def resolver(...): ...
+```
+
+Если поменять местами — обычный пользователь получит данные из кеша в обход `@staff_only`. Это **дыра в безопасности**, покрыта регрессионным тестом `test_permissions_checked_before_cache`.
+
+**Backend кеша** — `django.core.cache`, дефолт — `LocMemCache` (in-memory). Для продакшена достаточно добавить в `CACHES`:
+
+```python
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL'),
+    },
+}
+```
+
+Резолверы и декоратор при этом не меняются.
+
+**Инвалидация.** Сейчас её нет — метрики «догоняют» данные через TTL. Если понадобится мгновенная актуальность — сбрасывайте кеш через `django.core.cache.cache.clear()` или сигналы `post_save` на `Order`.
+
+---
+
 ## Аутентификация и безопасность
 
 ### Web UI (браузер)
@@ -432,6 +671,13 @@ curl -X POST http://localhost:8080/api/token/refresh/ \
 | `ROTATE_REFRESH_TOKENS` | `True` |
 | `BLACKLIST_AFTER_ROTATION` | `False` |
 
+### GraphQL (аналитика)
+
+- Использует **тот же JWT**, что и REST API — единая точка выпуска токенов.
+- Токен передаётся в стандартном заголовке `Authorization: Bearer ...`.
+- Отдельного механизма аутентификации в GraphQL нет — `GraphQLJWTAuthMiddleware` переиспользует `AccessToken` от SimpleJWT.
+- Эндпоинт `/graphql/` объявлен как `csrf_exempt` — это безопасно, потому что JWT не полагается на cookies, и CSRF-атака технически невозможна.
+
 ---
 
 ## OpenAPI и интерактивная документация
@@ -443,6 +689,7 @@ curl -X POST http://localhost:8080/api/token/refresh/ \
 | Swagger UI | `/api/docs/` |
 | ReDoc | `/api/redoc/` |
 | OpenAPI YAML | `/api/schema/` |
+| **GraphiQL (GraphQL IDE)** | **`/graphql/`** |
 
 Проверка схемы на валидность:
 
@@ -456,10 +703,10 @@ poetry run python manage.py spectacular --validate
 
 ### Запуск тестов
 
-**Сценарий 1 — быстро, на SQLite:**
+**Сценарий 1 — быстро, на SQLite in-memory:**
 
 ```bash
-poetry run pytest --ds=config.settings.development -q --no-cov
+poetry run pytest --ds=config.settings.test
 ```
 
 **Сценарий 2 — как в CI, на PostgreSQL:**
@@ -472,10 +719,16 @@ docker compose up -d db
 poetry run pytest --ds=config.settings.ci --create-db --migrations
 ```
 
-**Сценарий 3 — с полным coverage-отчётом:**
+**Сценарий 3 — только GraphQL-тесты, без coverage:**
 
 ```bash
-poetry run pytest --ds=config.settings.development \
+poetry run pytest tests/graphql/ --ds=config.settings.test --no-cov -v
+```
+
+**Сценарий 4 — с полным coverage-отчётом:**
+
+```bash
+poetry run pytest --ds=config.settings.test \
   --cov=. --cov-report=term-missing --cov-report=html
 ```
 
@@ -485,7 +738,22 @@ HTML-отчёт: `htmlcov/index.html`.
 
 Целевой порог — **70%** (`--cov-fail-under=70`).
 
-Декларативные файлы (`apps.py`, `migrations`, `wsgi.py`, `asgi.py`, `urls.py`, `admin.py`, `conftest.py`) исключены через `.coveragerc`.
+Декларативные файлы (`apps.py`, `migrations`, `wsgi.py`, `asgi.py`, `urls.py`, `admin.py`, `conftest.py`, `*/graphql/types.py`, `*/graphql/__init__.py`) исключены через `.coveragerc`.
+
+### Структура тестов
+
+- **Модульные тесты приложения** — в `<app>/tests.py`.
+- **Сервисные тесты** — в `<app>/tests_services.py` (без HTTP-клиента).
+- **Интеграционные GraphQL-тесты** — в `tests/graphql/`:
+  - `test_permissions.py` — аноним / FORBIDDEN / staff / health.
+  - `test_order_analytics.py` — `orderMetrics`, `orderTrends`.
+  - `test_product_analitics.py` — `lowStockProducts`, `popularProducts`, `outOfStockProducts`.
+  - `test_user_queries.py` — `me`, аналитика пользователей.
+  - `test_cache.py` — кеширование метрик и порядок проверки прав относительно кеша.
+- **Фикстуры** — в глобальном `conftest.py`. Включают:
+  - `staff_user` — staff без superuser (для проверки аналитики).
+  - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
+  - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста. Без неё `LocMemCache` живёт между тестами и ломает изоляцию.
 
 ### Статический анализ
 
@@ -575,6 +843,8 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 - **Финансовые транзакции read-only**: `PaymentTransactionAdmin` запрещает создание и редактирование.
 - **Кастомная страница удаления товара**: товары с историей заказов не удаляются, а деактивируются через `delete_view` + `has_delete_permission`.
 
+Аналогичные метрики доступны через GraphQL-эндпоинт `/graphql/` — для интеграции с внешними дашбордами (Grafana, Metabase, BI-системы).
+
 ---
 
 ## Ограничения и известные компромиссы
@@ -592,7 +862,13 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 
 ### GraphQL
 
-- Раздел 3.9 ТЗ (**бонус**) **не реализован** на момент текущей версии. Аналитика доступна через REST API и административный дашборд.
+- Раздел 3.9 ТЗ (бонус) **реализован** на Strawberry GraphQL.
+- Аналитические резолверы защищены `@staff_only` — обычные пользователи получают `FORBIDDEN`, гости — `UNAUTHENTICATED`.
+- **Кеширование аналитических метрик** реализовано через декоратор `config/graphql/cache.py:@cache_metric`. Backend по умолчанию — `LocMemCache` (in-memory, подходит для dev и одного воркера). Для продакшена достаточно добавить в `CACHES` backend `RedisCache` — код резолверов менять не нужно.
+- **TTL для метрик разный**: `out_of_stock` — 60 сек (критично для UX), `low_stock` — 120 сек, `popular_products` и `repeat_purchase_trend` — 600 сек (статистика за всё время меняется медленно), остальные — 300 сек.
+- **Инвалидации по сигналам нет** — метрики «догоняют» данные через TTL. При необходимости — `cache.clear()` вручную или сигнал `post_save` на `Order`.
+- **Подписки (subscriptions) не реализованы** — требуют Django Channels, что выходит за рамки бонусного задания.
+- **Мутации для CRUD в GraphQL отсутствуют** — весь CRUD закрыт через REST API. Дублировать его смысла нет.
 
 ### Хранение файлов
 
@@ -612,6 +888,7 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 ### Тесты
 
 - Покрытие тестами сфокусировано на бизнес-логике и моделях. Views, сериализаторы и API-контроллеры покрыты частично.
+- GraphQL-тесты покрывают права доступа, ключевые метрики и кеш.
 - Нет тестов на race condition (`select_for_update`) — сложно воспроизвести в `TestCase`.
 
 ### Инфраструктура

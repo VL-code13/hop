@@ -190,6 +190,46 @@ def calculate_total_price(cart_items: list[dict]) -> Decimal:
 - Длинные функции (> 40 строк) — декомпозировать.
 - `SELECT N+1` — использовать `select_related` / `prefetch_related`.
 
+### GraphQL-специфика
+
+При работе с GraphQL-слоем (Strawberry) соблюдай дополнительные правила:
+
+- **Forward references в аннотациях** (`'ClassName'`) недопустимы, если класс не определён в этом же модуле. Strawberry не сможет разрешить тип при сборке схемы.
+- **Импорты типов — только на уровне модуля.** Не импортируй Strawberry-типы внутри функций — это ломает `get_type_hints()`.
+- **Порядок декораторов строго такой:**
+
+  ```python
+  @strawberry.field         # внешний
+  @staff_only               # проверка прав — ДО кеша
+  @cache_metric(...)        # кеш — только после успешной проверки
+  def resolver(...): ...
+  ```
+
+  Если поменять местами `staff_only` и `cache_metric`, обычный пользователь получит данные из кеша в обход проверки прав. Это **дыра в безопасности**, покрыта регрессионным тестом `test_permissions_checked_before_cache`.
+- **Не используй `ModelType.from_django(...)`** — такого метода нет. Возвращай инстанс модели напрямую, Strawberry сам конвертирует его в GraphQL-тип.
+- **Таймзоны:** для фильтрации по `__date` используй `timezone.localdate()`, а не `timezone.now().date()`. Иначе фильтр в UTC разойдётся с ORM, который конвертирует в `TIME_ZONE`.
+- **Денежные значения квантизуй:** `.quantize(Decimal('0.01'))` — иначе `str(Decimal('1000'))` вернёт `'1000'` вместо `'1000.00'`.
+- **Docstrings** — на каждый резолвер, с описанием аргументов и прав доступа.
+
+### PEP 695 — параметризованные функции
+
+Проект использует Python 3.12, поэтому Ruff включает правило `UP047` — требование PEP 695 синтаксиса для generic-функций. Вместо:
+
+```python
+from typing import TypeVar
+F = TypeVar('F', bound=Callable[..., Any])
+
+def decorator(func: F) -> F: ...
+```
+
+пиши:
+
+```python
+def decorator[F: Callable[..., Any]](func: F) -> F: ...
+```
+
+Параметры типа объявляются прямо в сигнатуре функции — до `(...)`.
+
 ---
 
 ## Управление зависимостями (Poetry)
@@ -204,6 +244,8 @@ name = "hop-and-barley"
 ...
 dependencies = [
     "django==6.1.1",
+    "strawberry-graphql (>=0.327.7,<0.328.0)",
+    "strawberry-graphql-django (>=0.89.2,<0.90.0)",
     ...
 ]
 
@@ -294,22 +336,62 @@ poetry lock
 ### Запуск тестов
 
 ```bash
-# Быстро, на SQLite
-poetry run pytest --ds=config.settings.development -q --no-cov
+# Быстро, на SQLite in-memory
+poetry run pytest --ds=config.settings.test
 
 # Как в CI, на PostgreSQL
 docker compose up -d db
 poetry run pytest --ds=config.settings.ci --create-db --migrations
 
+# Только GraphQL-тесты, быстро (без coverage)
+poetry run pytest tests/graphql/ --ds=config.settings.test --no-cov -v
+
 # С покрытием
-poetry run pytest --ds=config.settings.development --cov=. --cov-report=html
+poetry run pytest --ds=config.settings.test --cov=. --cov-report=html
 ```
 
 ### Структура тестов
 
-- **Модульные тесты** — в `tests.py` соответствующего приложения.
-- **Сервисные тесты** — в `tests_services.py` (без HTTP-клиента).
-- **Фикстуры** — в глобальном `conftest.py`.
+- **Модульные тесты** — в `<app>/tests.py`.
+- **Сервисные тесты** — в `<app>/tests_services.py` (без HTTP-клиента).
+- **Интеграционные GraphQL-тесты** — в `tests/graphql/`:
+  - `test_permissions.py` — права доступа (`UNAUTHENTICATED` / `FORBIDDEN` / staff).
+  - `test_order_analytics.py` — `orderMetrics`, `orderTrends`.
+  - `test_product_analitics.py` — `lowStockProducts`, `popularProducts`, `outOfStockProducts`.
+  - `test_user_queries.py` — `me`, аналитика пользователей.
+  - `test_cache.py` — кеширование метрик и порядок проверки прав относительно кеша.
+- **Фикстуры** — в глобальном `conftest.py`. В том числе:
+  - `staff_user` — staff без superuser (для проверки аналитики).
+  - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
+  - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста. Без неё `LocMemCache` живёт между тестами и ломает изоляцию: тест, прогревающий аналитический резолвер, «протечёт» в следующий тест и вернёт устаревшие данные.
+
+### Тестирование GraphQL с JWT
+
+Пример теста с авторизацией:
+
+```python
+@pytest.mark.django_db
+def test_analytics_available_for_staff(staff_token: str) -> None:
+    """Staff-пользователь получает данные аналитики."""
+    response = Client().post(
+        '/graphql/',
+        data='{"query": "{ orderMetrics { orderCount } }"}',
+        content_type='application/json',
+        HTTP_AUTHORIZATION=f'Bearer {staff_token}',
+    )
+    payload = response.json()
+    assert 'errors' not in payload
+    assert payload['data']['orderMetrics']['orderCount'] == 0
+```
+
+**Важно:** GraphQL может вернуть `data: null` целиком (а не `data.orderMetrics: null`), когда упавший резолвер помечен как non-nullable. Поэтому в тестах проверяй `payload.get('data') is None or payload['data'].get('orderMetrics') is None` — это безопаснее.
+
+### Тестирование кеша
+
+Декоратор `@cache_metric` кеширует результат резолвера в `django.core.cache`. В тестах важно помнить:
+
+- **Кеш не сбрасывается между тестами автоматически.** Autouse-фикстура `_clear_cache` в `conftest.py` решает это.
+- **Проверка прав должна идти до кеша.** Это покрыто тестом `test_permissions_checked_before_cache` — если кто-то поменяет порядок декораторов, тест упадёт.
 
 ---
 
@@ -347,6 +429,17 @@ test(reviews): покрыть бизнес-правило «отзыв толь�
 docs(readme): добавить примеры запросов с JWT
 chore(deps): мигрировать с requirements.txt на Poetry 2.x
 ci: обновить workflow под poetry run
+
+# GraphQL-специфика
+feat(graphql): добавить аналитический эндпоинт на Strawberry
+feat(graphql): реализовать orderMetrics и orderTrends
+feat(graphql): защитить аналитику декоратором @staff_only
+feat(graphql): кешировать аналитические метрики через @cache_metric
+fix(graphql): использовать timezone.localdate() вместо timezone.now().date()
+fix(graphql): квантизовать Decimal до 2 знаков в денежных резолверах
+test(graphql): покрыть права доступа и orderMetrics
+test(graphql): покрыть кеш метрик и порядок проверки прав
+docs(readme): описать схему и примеры запросов в README
 ```
 
 ### Примеры плохих коммитов
@@ -357,6 +450,7 @@ WIP                       # черновик
 update files              # какие файлы? что обновил?
 Fix bug                   # какой баг?
 срочно                    # не по конвенции
+add graphql               # без типа и области
 ```
 
 ### Правила
@@ -380,7 +474,7 @@ git rebase origin/dev_3st_week
 Прогоните все проверки (см. [чек-лист](#чек-лист-перед-push)).
 
 Обновите `README.md`, если меняли:
-- публичное API,
+- публичное API (REST или GraphQL),
 - переменные окружения,
 - структуру проекта,
 - зависимости.
@@ -440,7 +534,7 @@ poetry run python manage.py makemigrations --check --dry-run
 poetry check --lock
 
 # 6. Тесты
-poetry run pytest --ds=config.settings.development -q
+poetry run pytest --ds=config.settings.test
 ```
 
 Если **все шесть** зелёные — можно пушить.
@@ -518,9 +612,12 @@ Traceback (most recent call last):
 - [Poetry docs](https://python-poetry.org/docs/) — документация Poetry
 - [PEP 621](https://peps.python.org/pep-0621/) — метаданные проекта
 - [PEP 735](https://peps.python.org/pep-0735/) — dependency groups
+- [PEP 695](https://peps.python.org/pep-0695/) — параметризованные функции и классы
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)
 - [DRF docs](https://www.django-rest-framework.org/)
+- [Strawberry GraphQL docs](https://strawberry.rocks/) — документация GraphQL-фреймворка
+- [strawberry-graphql-django](https://strawberry-graphql-django.readthedocs.io/) — интеграция с Django ORM
 - [Conventional Commits](https://www.conventionalcommits.org/ru/v1.0.0/)
 
 ---
