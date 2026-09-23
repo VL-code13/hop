@@ -10,20 +10,24 @@ from decimal import Decimal
 from typing import Final
 
 import strawberry
-from django.db.models import Count, DecimalField, F, Sum, Value
+from django.db.models import DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
 from strawberry.types import Info
 
+from config.graphql.cache import cache_metric
 from config.graphql.permissions import staff_only
 from orders.models import Order, OrderItem
+from products.graphql.types import PopularProduct, StockStatus
 from products.models import Product
-from products.graphql.types import PopularProduct, ProductType, StockStatus
 
 #: Статусы заказа, при которых выручка считается «заработанной».
 #: ВАЖНО: значения должны совпадать с Order.Status в вашей модели.
 #: Если у вас они капсом (PAID, SHIPPED, DELIVERED) — поправьте здесь.
-REVENUE_STATUSES: Final[list[str]] = ['paid', 'shipped', 'delivered']
-
+REVENUE_STATUSES: Final[list[str]] = [
+    Order.Status.PAID,
+    Order.Status.SHIPPED,
+    Order.Status.DELIVERED,
+]
 #: Порог, ниже которого товар попадает в «мало на складе».
 DEFAULT_LOW_STOCK_THRESHOLD: Final[int] = 5
 
@@ -34,6 +38,7 @@ class ProductAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=600, prefix='products')  # популярные меняются редко — 10 минут
     def popular_products(
         self,
         info: Info,
@@ -86,15 +91,16 @@ class ProductAnalyticsQuery:
                 continue
             result.append(
                 PopularProduct(
-                    product=ProductType.from_django(product),
+                    product=product,
                     units_sold=row['units_sold'],
-                    revenue=row['revenue'],
+                    revenue=row['revenue'].quantize(Decimal('0.01')),
                 )
             )
         return result
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=120, prefix='products')  # низкие остатки — 2 минуты
     def low_stock_products(
         self,
         info: Info,
@@ -125,7 +131,7 @@ class ProductAnalyticsQuery:
 
         return [
             StockStatus(
-                product=ProductType.from_django(product),
+                product=product,  # ← передаём модель, Strawberry конвертирует сам
                 stock=product.stock,
                 threshold=threshold,
                 deficit=threshold - product.stock,
@@ -135,6 +141,7 @@ class ProductAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=60, prefix='products')  # out-of-stock критичен — 1 минута
     def out_of_stock_products(self, info: Info, limit: int = 100) -> list[StockStatus]:
         """Активные товары с нулевым остатком.
 
@@ -148,15 +155,11 @@ class ProductAnalyticsQuery:
         Returns:
             Список StockStatus с stock=0.
         """
-        queryset = (
-            Product.objects.filter(is_active=True, stock=0)
-            .select_related('category')
-            .order_by('name')[:limit]
-        )
+        queryset = Product.objects.filter(is_active=True, stock=0).select_related('category').order_by('name')[:limit]
 
         return [
             StockStatus(
-                product=ProductType.from_django(product),
+                product=product,
                 stock=0,
                 threshold=DEFAULT_LOW_STOCK_THRESHOLD,
                 # Для нулевого остатка deficit = сам порог, ведь дефицит

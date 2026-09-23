@@ -17,13 +17,18 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
 from django.utils import timezone
 from strawberry.types import Info
 
+from config.graphql.cache import cache_metric
 from config.graphql.permissions import staff_only
 from orders.graphql.types import TrendPoint  # ← добавлено: импорт на уровне модуля
 from orders.models import Order
 from users.graphql.types import UserActivityMetrics
 
 #: Статусы, при которых заказ считается «состоявшимся».
-REVENUE_STATUSES: Final[list[str]] = ['paid', 'shipped', 'delivered']
+REVENUE_STATUSES: Final[list[str]] = [
+    Order.Status.PAID,
+    Order.Status.SHIPPED,
+    Order.Status.DELIVERED,
+]
 
 #: Минимальное количество заказов, чтобы считаться «повторным» покупателем.
 REPEAT_THRESHOLD: Final[int] = 2
@@ -60,7 +65,7 @@ def _resolve_date_range(date_from: date | None, date_to: date | None) -> tuple[d
     Returns:
         Кортеж (date_from, date_to).
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     if date_from is None and date_to is None:
         return today - timedelta(days=DEFAULT_PERIOD_DAYS - 1), today
     if date_from is None:
@@ -77,11 +82,12 @@ class UserAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=300, prefix='users')
     def user_activity(
-        self,
-        info: Info,
-        date_from: date | None = None,
-        date_to: date | None = None,
+            self,
+            info: Info,
+            date_from: date | None = None,
+            date_to: date | None = None,
     ) -> UserActivityMetrics:
         """Сводные метрики активности и удержания.
 
@@ -101,10 +107,14 @@ class UserAnalyticsQuery:
         """
         d_from, d_to = _resolve_date_range(date_from, date_to)
 
-        new_users = get_user_model().objects.filter(
-            date_joined__date__gte=d_from,
-            date_joined__date__lte=d_to,
-        ).count()
+        new_users = (
+            get_user_model()
+            .objects.filter(
+                date_joined__date__gte=d_from,
+                date_joined__date__lte=d_to,
+            )
+            .count()
+        )
 
         paid_orders = Order.objects.filter(
             status__in=REVENUE_STATUSES,
@@ -129,12 +139,13 @@ class UserAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=600, prefix='users')
     def repeat_purchase_trend(
-        self,
-        info: Info,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        interval: str = 'month',
+            self,
+            info: Info,
+            date_from: date | None = None,
+            date_to: date | None = None,
+            interval: str = 'month',
     ) -> list[TrendPoint]:  # ← убраны кавычки и # type: ignore
         """Динамика повторных покупок по интервалам.
 
@@ -170,13 +181,11 @@ class UserAnalyticsQuery:
                 period = row['period'].date() if hasattr(row['period'], 'date') else row['period']
                 buckets.setdefault(period, set()).add(row['user_id'])
 
-        return [
-            TrendPoint(period=period, value=float(len(users)))
-            for period, users in sorted(buckets.items())
-        ]
+        return [TrendPoint(period=period, value=float(len(users))) for period, users in sorted(buckets.items())]
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=300, prefix='users')
     def customer_lifetime_value(self, info: Info, user_id: strawberry.ID) -> Decimal:
         """Суммарная выручка от одного пользователя за всё время.
 
@@ -189,10 +198,8 @@ class UserAnalyticsQuery:
         Returns:
             Decimal — сумма total_price всех «заработанных» заказов.
         """
-        total = (
-            Order.objects.filter(
-                user_id=user_id,
-                status__in=REVENUE_STATUSES,
-            ).aggregate(total=Sum('total_price'))['total']
-        )
-        return total or Decimal('0.00')
+        total = Order.objects.filter(
+            user_id=user_id,
+            status__in=REVENUE_STATUSES,
+        ).aggregate(total=Sum('total_price'))['total']
+        return (total or Decimal('0.00')).quantize(Decimal('0.01'))

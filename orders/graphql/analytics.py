@@ -11,19 +11,23 @@ from decimal import Decimal
 from typing import Final
 
 import strawberry
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Sum
 from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
 from django.utils import timezone
 from strawberry.types import Info
 
+from config.graphql.cache import cache_metric
 from config.graphql.permissions import staff_only
-from orders.models import Order
 from orders.graphql.types import OrderMetrics, OrderTrends, TrendPoint
+from orders.models import Order
 
 #: Статусы, при которых заказ считается «заработанным».
 #: ПРОВЕРЬТЕ, что эти значения совпадают с Order.Status в вашей модели.
-REVENUE_STATUSES: Final[list[str]] = ['paid', 'shipped', 'delivered']
-
+REVENUE_STATUSES: Final[list[str]] = [
+    Order.Status.PAID,
+    Order.Status.SHIPPED,
+    Order.Status.DELIVERED,
+]
 #: Длина периода по умолчанию, если клиент не передал даты.
 DEFAULT_PERIOD_DAYS: Final[int] = 30
 
@@ -50,8 +54,8 @@ def _resolve_interval(interval: str) -> object:
 
 
 def _resolve_date_range(
-    date_from: date | None,
-    date_to: date | None,
+        date_from: date | None,
+        date_to: date | None,
 ) -> tuple[date, date]:
     """Нормализует входной диапазон дат.
 
@@ -66,7 +70,7 @@ def _resolve_date_range(
     Returns:
         Кортеж (date_from, date_to).
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     if date_from is None and date_to is None:
         return today - timedelta(days=DEFAULT_PERIOD_DAYS - 1), today
     if date_from is None:
@@ -84,11 +88,12 @@ class OrderAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=300,prefix='orders')  # 5 minutes
     def order_metrics(
-        self,
-        info: Info,
-        date_from: date | None = None,
-        date_to: date | None = None,
+            self,
+            info: Info,
+            date_from: date | None = None,
+            date_to: date | None = None,
     ) -> OrderMetrics:
         """Сводные метрики заказов за период.
 
@@ -128,11 +133,12 @@ class OrderAnalyticsQuery:
             unique_customers=Count('user_id', distinct=True),
         )
 
-        # None при пустой выборке — приводим к нулям корректных типов.
-        total_revenue = agg['total_revenue'] or Decimal('0.00')
+        # Квантизация до 2 знаков после запятой. Без неё str(Decimal('1000'))
+        # вернёт '1000', а клиент ожидает '1000.00' — фиксированный денежный формат.
+        two_places = Decimal('0.01')
+        total_revenue = (agg['total_revenue'] or Decimal('0.00')).quantize(two_places)
         order_count = agg['order_count'] or 0
-        avg = total_revenue / order_count if order_count else Decimal('0.00')
-
+        avg = (total_revenue / order_count).quantize(two_places) if order_count else Decimal('0.00')
         # Отменённые считаем отдельно — они не входят в выручку.
         cancelled = Order.objects.filter(
             status='cancelled',
@@ -150,12 +156,13 @@ class OrderAnalyticsQuery:
 
     @strawberry.field
     @staff_only
+    @cache_metric(ttl=300, prefix='orders')
     def order_trends(
-        self,
-        info: Info,
-        date_from: date | None = None,
-        date_to: date | None = None,
-        interval: str = DEFAULT_INTERVAL,
+            self,
+            info: Info,
+            date_from: date | None = None,
+            date_to: date | None = None,
+            interval: str = DEFAULT_INTERVAL,
     ) -> OrderTrends:
         """Динамика заказов по интервалам.
 
@@ -199,9 +206,9 @@ class OrderAnalyticsQuery:
             # row['period'] — datetime, приводим к date, чтобы GraphQL-скаляр
             # date сериализовался корректно.
             period = row['period'].date() if hasattr(row['period'], 'date') else row['period']
-            revenue_points.append(TrendPoint(period=period, value=float(row['revenue'] or 0)))
+            revenue_points.append(TrendPoint(period=period, value=round(float(row['revenue'] or 0), 2)))
             order_points.append(TrendPoint(period=period, value=float(row['orders'] or 0)))
-            avg_points.append(TrendPoint(period=period, value=float(row['avg'] or 0)))
+            avg_points.append(TrendPoint(period=period, value=round(float(row['avg'] or 0), 2)))
 
         return OrderTrends(
             revenue=revenue_points,
