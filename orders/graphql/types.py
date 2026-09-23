@@ -5,7 +5,6 @@ from decimal import Decimal
 
 import strawberry
 import strawberry_django
-from strawberry.scalars import Decimal as DecimalScalar
 
 from orders.models import Order, OrderItem
 from products.graphql.types import ProductType
@@ -17,7 +16,7 @@ class OrderItemType:
 
     id: strawberry.ID
     quantity: strawberry.auto
-    price: DecimalScalar
+    price: Decimal
 
     @strawberry.field
     def product(self, info: object) -> ProductType:
@@ -29,7 +28,7 @@ class OrderItemType:
         return ProductType.from_django(self.product)
 
     @strawberry.field
-    def line_total(self) -> DecimalScalar:
+    def line_total(self) -> Decimal:
         """Стоимость строки: price * quantity."""
         return self.price * self.quantity
 
@@ -40,7 +39,7 @@ class OrderType:
 
     id: strawberry.ID
     status: strawberry.auto
-    total_price: DecimalScalar
+    total_price: Decimal
     created_at: strawberry.auto
     items: list[OrderItemType]
 
@@ -68,9 +67,9 @@ class TrendPoint:
 class OrderMetrics:
     """Сводные метрики заказов за период."""
 
-    total_revenue: DecimalScalar
+    total_revenue: Decimal
     order_count: int
-    average_order_value: DecimalScalar
+    average_order_value: Decimal
     unique_customers: int
     cancelled_count: int
 

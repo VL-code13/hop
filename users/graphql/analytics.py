@@ -15,15 +15,14 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
 from django.utils import timezone
-from strawberry.scalars import Decimal as DecimalScalar
 from strawberry.types import Info
 
 from config.graphql.permissions import staff_only
+from orders.graphql.types import TrendPoint  # ← добавлено: импорт на уровне модуля
 from orders.models import Order
 from users.graphql.types import UserActivityMetrics
 
 #: Статусы, при которых заказ считается «состоявшимся».
-#: ПРОВЕРЬТЕ совпадение с вашим Order.Status.
 REVENUE_STATUSES: Final[list[str]] = ['paid', 'shipped', 'delivered']
 
 #: Минимальное количество заказов, чтобы считаться «повторным» покупателем.
@@ -92,9 +91,6 @@ class UserAnalyticsQuery:
                среди оплаченных заказов.
             3. Считаем повторных — тех, у кого 2+ таких заказов.
 
-        Пункты 2 и 3 считаются из одной выборки: сначала GROUP BY user_id,
-        потом фильтрация по количеству. Это экономит один запрос к БД.
-
         Args:
             info: GraphQL-контекст.
             date_from: Начало периода.
@@ -105,22 +101,18 @@ class UserAnalyticsQuery:
         """
         d_from, d_to = _resolve_date_range(date_from, date_to)
 
-        # 1. Новые регистрации за период.
         new_users = get_user_model().objects.filter(
             date_joined__date__gte=d_from,
             date_joined__date__lte=d_to,
         ).count()
 
-        # 2. Оплаченные заказы за период — база для расчётов 2 и 3.
         paid_orders = Order.objects.filter(
             status__in=REVENUE_STATUSES,
             created_at__date__gte=d_from,
             created_at__date__lte=d_to,
         )
 
-        # Группируем по пользователю: сколько у кого заказов.
         per_user = paid_orders.values('user_id').annotate(orders=Count('id'))
-
         active_buyers = per_user.count()
         repeat_buyers = per_user.filter(orders__gte=REPEAT_THRESHOLD).count()
 
@@ -143,12 +135,11 @@ class UserAnalyticsQuery:
         date_from: date | None = None,
         date_to: date | None = None,
         interval: str = 'month',
-    ) -> list['TrendPoint']:  # type: ignore[name-defined]  # noqa: F821
+    ) -> list[TrendPoint]:  # ← убраны кавычки и # type: ignore
         """Динамика повторных покупок по интервалам.
 
         Для каждого интервала возвращаем количество пользователей,
-        которые совершили 2+ заказа ЗА ЭТОТ интервал. Это упрощённая,
-        но понятная метрика retention — клиенту легко построить график.
+        которые совершили 2+ заказа ЗА ЭТОТ интервал.
 
         Args:
             info: GraphQL-контекст.
@@ -159,8 +150,6 @@ class UserAnalyticsQuery:
         Returns:
             Список TrendPoint, где value — число повторных покупателей.
         """
-        from orders.graphql.types import TrendPoint  # локальный импорт — избегаем цикла
-
         d_from, d_to = _resolve_date_range(date_from, date_to)
         trunc = _resolve_interval(interval)
 
@@ -175,10 +164,6 @@ class UserAnalyticsQuery:
             .annotate(user_orders=Count('id'))
         )
 
-        # Собираем в питоне: интервал → множество user_id с 2+ заказами.
-        # Питоновский проход здесь оправдан: нам нужна дедупликация
-        # пользователей по интервалам, а SQL DISTINCT по составному
-        # ключу (period, user_id) не умеет этого напрямую.
         buckets: dict[date, set[int]] = {}
         for row in rows:
             if row['user_orders'] >= REPEAT_THRESHOLD:
@@ -192,7 +177,7 @@ class UserAnalyticsQuery:
 
     @strawberry.field
     @staff_only
-    def customer_lifetime_value(self, info: Info, user_id: strawberry.ID) -> DecimalScalar:
+    def customer_lifetime_value(self, info: Info, user_id: strawberry.ID) -> Decimal:
         """Суммарная выручка от одного пользователя за всё время.
 
         LTV — накопительная метрика, поэтому не ограничиваем её периодом.
@@ -203,7 +188,6 @@ class UserAnalyticsQuery:
 
         Returns:
             Decimal — сумма total_price всех «заработанных» заказов.
-            Decimal('0.00'), если заказов нет.
         """
         total = (
             Order.objects.filter(

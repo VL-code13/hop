@@ -8,12 +8,14 @@
 - 3.6 («Административная панель и аналитика»)
 - 3.7 («REST API: каталог, заказы, корзина, отзывы, JWT»)
 - 3.8 («Документация Swagger/OpenAPI через drf-spectacular»)
+- 3.9 («GraphQL: единый аналитический эндпоинт», бонус)
 """
 
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -24,16 +26,14 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from strawberry.django.views import GraphQLView
-
-from config.graphql.context import get_context
-from config.graphql.schema import schema
 
 from config.admin import HopBarleyAdminSite
+from config.graphql.context import HopBarleyGraphQLView  # ← изменён импорт
+from config.graphql.schema import schema
 from orders.api_views_orders import CartAPIView, OrderViewSet
 from products.api_views_products import ProductViewSet
 from reviews.api_views_reviews import ProductReviewsAPIView
-from users.views import RegisterView  # Контроллер регистрации по ТЗ
+from users.views import RegisterView
 
 # Кастомная панель администратора с аналитикой (раздел 3.6 ТЗ)
 custom_admin_site = HopBarleyAdminSite(name='custom_admin')
@@ -63,7 +63,6 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/cart/', CartAPIView.as_view(), name='api-cart'),
     path('api/products/<int:product_id>/reviews/', ProductReviewsAPIView.as_view(), name='api-product-reviews'),
-    # Регистрация и JWT-авторизация в API (раздел 3.7 ТЗ)
     path('api/users/register/', RegisterView.as_view(), name='api-user-register'),
     path('api/users/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -73,12 +72,16 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    # 9. GraphQL — единый эндпоинт для всех запросов.
-    # csrf_exempt: GraphQL-клиенты передают токен в заголовке, а не в форме.
-    # context_getter: подкладывает наш GraphQLContext в info.context.
+    # =========================================================================
+    # 9. GraphQL — единый эндпоинт (раздел 3.9 ТЗ, бонус)
+    # =========================================================================
+    # csrf_exempt: GraphQL-клиенты передают JWT в заголовке Authorization,
+    #   а не в форме — CSRF-токен для них не нужен и только мешает.
+    # context задаётся через HopBarleyGraphQLView.get_context() —
+    #   параметр context_getter в Django-интеграции Strawberry не поддерживается.
     path(
         'graphql/',
-        csrf_exempt(GraphQLView.as_view(schema=schema, context_getter=get_context)),
+        csrf_exempt(HopBarleyGraphQLView.as_view(schema=schema)),
         name='graphql',
     ),
 ]

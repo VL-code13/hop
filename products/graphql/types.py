@@ -9,7 +9,6 @@ from decimal import Decimal
 
 import strawberry
 import strawberry_django
-from strawberry.scalars import Decimal as DecimalScalar
 
 from products.models import Category, Product
 
@@ -30,7 +29,7 @@ class ProductType:
     id: strawberry.ID
     name: strawberry.auto
     slug: strawberry.auto
-    price: DecimalScalar
+    price: Decimal
     stock: strawberry.auto
     is_active: strawberry.auto
     category: CategoryType
@@ -47,7 +46,7 @@ class PopularProduct:
 
     product: ProductType
     units_sold: int
-    revenue: DecimalScalar
+    revenue: Decimal
 
 
 @strawberry.type
