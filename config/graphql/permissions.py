@@ -11,15 +11,13 @@ Graphene/Strawberry не имеют встроенного эквивалент�
 
 import functools
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from graphql import GraphQLError
 from strawberry.types import Info
 
-F = TypeVar('F', bound=Callable[..., Any])
 
-
-def staff_only(resolver: F) -> F:
+def staff_only[F: Callable[..., Any]](resolver: F) -> F:
     """Декоратор: разрешает вызов только аутентифицированному staff-пользователю.
 
     Используется так:

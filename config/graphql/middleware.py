@@ -73,7 +73,7 @@ class GraphQLJWTAuthMiddleware:
         if not header.startswith(AUTH_HEADER_PREFIX):
             return
 
-        raw_token = header[len(AUTH_HEADER_PREFIX):].strip()
+        raw_token = header[len(AUTH_HEADER_PREFIX) :].strip()
         if not raw_token:
             return
 
