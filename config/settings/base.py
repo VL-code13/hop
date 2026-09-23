@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',  # JWT аутентификация по ТЗ
     'drf_spectacular',
     'django_filters',
+    'strawberry_django', # интеграция Strawberry c Django ORM
     # Приложения проекта
     'products',
     'orders',
@@ -77,7 +78,25 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
 }
+# ─────────────────────────────────────────────────────────────────────────────
+# Strawberry GraphQL (раздел 3.9 ТЗ — бонус)
+# ─────────────────────────────────────────────────────────────────────────────
+# Один эндпоинт /graphql/ для всех запросов: и витрины, и аналитики.
+# Схема собирается из модулей graphql/ каждого приложения — см. config/graphql/schema.py
+STRAWBERRY_DJANGO = {
+    # Ограничение сложности запроса на стороне сервера. Защищает от
+    # «запросов-убийц», которые могут обрушить БД аналитики.
+    'MAX_QUERY_DEPTH': 15,
+    # Максимум полей в одном запросе — тоже защита от abuse.
+    'MAX_QUERY_COMPLEXITY': 1000,
+}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MIDDLEWARE — добавляем аутентификацию GraphQL по JWT.
+# ─────────────────────────────────────────────────────────────────────────────
+# Ставим ПОСЛЕ AuthenticationMiddleware (чтобы request.user уже был установлен),
+# но ДО наших вьюх. Наш middleware аккуратно подменяет request.user, если
+# в заголовке Authorization передан валидный Bearer-токен.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -85,6 +104,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'config.graphql.middleware.GraphQLJWTAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
