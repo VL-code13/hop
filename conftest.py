@@ -1,8 +1,8 @@
 """
 Глобальные фикстуры pytest для проекта Hop & Barley.
 
-Покрывает: пользователей, категории, товары, корзину, заказы, отзывы.
-Все фабрики создают минимально валидные объекты.
+Покрывает: пользователей, JWT-токены для GraphQL, категории, товары,
+корзину, заказы, отзывы. Все фабрики создают минимально валидные объекты.
 """
 
 from decimal import Decimal
@@ -11,7 +11,9 @@ from itertools import count
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.core.cache import cache  # ← ДОБАВИТЬ
 from django.test import RequestFactory
+from rest_framework_simplejwt.tokens import AccessToken
 
 from orders.cart import Cart
 from orders.models import Order, OrderItem
@@ -25,6 +27,25 @@ User = get_user_model()
 
 
 @pytest.fixture(autouse=True)
+def _clear_cache():
+    """Сбрасывает кеш перед каждым тестом и после него.
+
+    ПРОБЛЕМА, которую это решает:
+        LocMemCache живёт в памяти процесса и НЕ очищается между
+        тестами автоматически. Если один тест прогнал аналитический
+        GraphQL-резолвер и закешировал результат, следующий тест
+        получит этот кешированный ответ вместо свежих данных из БД —
+        даже если pytest-django откатил транзакцию.
+
+    Плюс autouse=True гарантирует, что фикстура применяется ко ВСЕМ
+    тестам проекта без явного указания в аргументах.
+    """
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def _disable_ssl_redirect(settings):
     """Отключает HTTPS-редирект для тестового клиента.
 
@@ -33,6 +54,9 @@ def _disable_ssl_redirect(settings):
     Здесь отключаем только для тестов.
     """
     settings.SECURE_SSL_REDIRECT = False
+
+
+# ... остальные фикстуры без изменений ...
 
 
 @pytest.fixture
@@ -64,7 +88,7 @@ def user_factory(db):
 
 @pytest.fixture
 def user(db, user_factory):
-    """Основной тестовый пользователь."""
+    """Основной тестовый пользователь (обычный покупатель)."""
     return user_factory(username='testuser', email='testusermail@domain.com')
 
 
@@ -72,6 +96,21 @@ def user(db, user_factory):
 def other_user(db, user_factory):
     """Второй пользователь — для проверки прав доступа."""
     return user_factory(username='otheruser', email='otheruser@domain.com')
+
+
+@pytest.fixture
+def staff_user(db, user_factory):
+    """Сотрудник: is_staff=True, но не superuser.
+
+    Отдельно от admin_user — нужен для проверки, что аналитика доступна
+    именно staff-пользователям, а не только суперпользователям.
+    """
+    return user_factory(
+        username='staff',
+        email='staff@domain.com',
+        is_staff=True,
+        is_superuser=False,
+    )
 
 
 @pytest.fixture
@@ -97,6 +136,37 @@ def request_with_user(request_factory, user):
     request.session.save()
     request.user = user
     return request
+
+
+# ──────────────────────── JWT-токены для GraphQL ────────────────────────
+# Токены выпускает тот же rest_framework_simplejwt, что и для REST API.
+# GraphQLJWTAuthMiddleware читает стандартный заголовок Authorization:
+#   HTTP_AUTHORIZATION = f'Bearer {token}'
+
+
+@pytest.fixture
+def user_token(user):
+    """JWT access-токен для обычного покупателя.
+
+    Нужен для теста FORBIDDEN: обычный пользователь не должен видеть
+    аналитику, но должен мочь дергать публичные GraphQL-запросы.
+    """
+    return str(AccessToken.for_user(user))
+
+
+@pytest.fixture
+def staff_token(staff_user):
+    """JWT access-токен для staff-пользователя.
+
+    Даёт доступ к аналитическим резолверам (@staff_only).
+    """
+    return str(AccessToken.for_user(staff_user))
+
+
+@pytest.fixture
+def admin_token(admin_user):
+    """JWT access-токен для суперпользователя."""
+    return str(AccessToken.for_user(admin_user))
 
 
 # ──────────────────────── Каталог ────────────────────────
@@ -195,7 +265,7 @@ def order_factory(db, user, product_factory):
     """Фабрика заказов. Создаёт Order + OrderItem автоматически."""
 
     def make(**kwargs):
-        prod = kwargs.pop('product', product_factory())
+        prod = kwargs.pop('product', None) or product_factory()
         quantity = kwargs.pop('quantity', 1)
         status = kwargs.pop('status', Order.Status.PENDING)
         payment_method = kwargs.pop('payment_method', Order.PaymentMethod.CARD)
@@ -229,14 +299,26 @@ def order(db, order_factory):
 
 @pytest.fixture
 def paid_order(db, order_factory):
-    """Оплаченный заказ — для тестов отзывов и доставки."""
+    """Оплаченный заказ — для тестов отзывов, доставки и аналитики."""
     return order_factory(status=Order.Status.PAID)
+
+
+@pytest.fixture
+def shipped_order(db, order_factory):
+    """Отправленный заказ — попадает в REVENUE_STATUSES аналитики."""
+    return order_factory(status=Order.Status.SHIPPED)
 
 
 @pytest.fixture
 def delivered_order(db, order_factory):
     """Доставленный заказ."""
     return order_factory(status=Order.Status.DELIVERED)
+
+
+@pytest.fixture
+def cancelled_order(db, order_factory):
+    """Отменённый заказ — не должен попадать в выручку."""
+    return order_factory(status=Order.Status.CANCELLED)
 
 
 # ──────────────────────── Отзывы ────────────────────────
@@ -255,7 +337,7 @@ def review_factory(db, paid_order):
 
     def make(**kwargs):
         idx = next(counter)
-        order = kwargs.pop('order', paid_order)
+        order = kwargs.pop('order', None) or paid_order
         product = kwargs.pop('product', order.items.first().product)
         review_user = kwargs.pop('user', order.user)
 
