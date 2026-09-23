@@ -217,7 +217,9 @@ def calculate_total_price(cart_items: list[dict]) -> Decimal:
 
 ```python
 from typing import TypeVar
+
 F = TypeVar('F', bound=Callable[..., Any])
+
 
 def decorator(func: F) -> F: ...
 ```
