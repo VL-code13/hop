@@ -26,4 +26,4 @@ class UserQuery:
         user = info.context.user
         if not user.is_authenticated:
             return None
-        return UserType.from_django(user)
+        return user

@@ -25,7 +25,7 @@ class OrderItemType:
         DjangoOptimizerExtension сам подтянет product через select_related,
         так что N+1 здесь не случится.
         """
-        return ProductType.from_django(self.product)
+        return ProductType.product
 
     @strawberry.field
     def line_total(self) -> Decimal:
