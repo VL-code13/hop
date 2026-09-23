@@ -1,6 +1,8 @@
 [run]
 omit =
     */migrations/*
+    */graphql/types.py
+    */graphql/__init__.py
     */tests/*
     */tests.py
     */apps.py

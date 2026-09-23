@@ -18,14 +18,20 @@ def test_health_is_public() -> None:
 
 @pytest.mark.django_db
 def test_analytics_requires_auth() -> None:
-    """Без токена — UNAUTHENTICATED."""
+    """Без токена — UNAUTHENTICATED.
+
+    GraphQL может вернуть «data: null» целиком (а не «data.orderMetrics: null»),
+    если ошибка выброшена до построения поля в ответе. Поэтому проверяем
+    через .get() и фокусируемся на коде ошибки.
+    """
     response = Client().post(
         '/graphql/',
         data='{"query": "{ orderMetrics { totalRevenue } }"}',
         content_type='application/json',
     )
     payload = response.json()
-    assert payload['data']['orderMetrics'] is None
+    # data может быть None целиком, либо содержать orderMetrics=None.
+    assert payload.get('data') is None or payload['data'].get('orderMetrics') is None
     assert payload['errors'][0]['extensions']['code'] == 'UNAUTHENTICATED'
 
 
@@ -39,7 +45,7 @@ def test_analytics_forbidden_for_regular_user(user_token: str) -> None:
         HTTP_AUTHORIZATION=f'Bearer {user_token}',
     )
     payload = response.json()
-    assert payload['data']['orderMetrics'] is None
+    assert payload.get('data') is None or payload['data'].get('orderMetrics') is None
     assert payload['errors'][0]['extensions']['code'] == 'FORBIDDEN'
 
 
