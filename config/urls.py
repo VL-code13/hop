@@ -24,6 +24,10 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from strawberry.django.views import GraphQLView
+
+from config.graphql.context import get_context
+from config.graphql.schema import schema
 
 from config.admin import HopBarleyAdminSite
 from orders.api_views_orders import CartAPIView, OrderViewSet
@@ -69,6 +73,14 @@ urlpatterns = [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # 9. GraphQL — единый эндпоинт для всех запросов.
+    # csrf_exempt: GraphQL-клиенты передают токен в заголовке, а не в форме.
+    # context_getter: подкладывает наш GraphQLContext в info.context.
+    path(
+        'graphql/',
+        csrf_exempt(GraphQLView.as_view(schema=schema, context_getter=get_context)),
+        name='graphql',
+    ),
 ]
 
 # Раздача медиафайлов при локальной разработке
