@@ -19,6 +19,7 @@
 - **кеширование аналитических метрик** через `@cache_metric` — per-resolver TTL, работает на любом Django cache backend;
 - **pre-commit hooks** для автоматического `ruff`, `ruff-format`, `mypy` и `pytest` перед коммитом и push;
 - **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
+- **кеширование аналитических метрик** через Redis — общий кеш для всех воркеров gunicorn, per-resolver TTL;
 
 [![CI](https://github.com/VL-code13/hop/actions/workflows/ci.yml/badge.svg?branch=dev_3st_week)](https://github.com/VL-code13/hop/actions/workflows/ci.yml)
 
@@ -59,7 +60,7 @@
 | Статический анализ    | Ruff 0.16 + Mypy 1.13 + django-stubs                          | Линтинг по PEP 8 и статическая типизация                     |
 | Контроль качества     | pre-commit 4.6.2                                              | Git-хуки для ruff, mypy, pytest                              |
 | Контейнеризация       | Docker + Docker Compose                                       | Изоляция сервисов веб-приложения и сервера БД                |
-
+| Кеш                   | Redis 7 + `django.core.cache.RedisCache`                      | Кеширование аналитических метрик GraphQL                     |
 ---
 
 ## Архитектурная структура проекта
@@ -277,7 +278,7 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 | `POSTGRES_PORT`          |     Нет     | `5432`                                    | Порт PostgreSQL.                                                           |
 | `EMAIL_BACKEND`          |     Нет     | `console`                                 | Backend отправки писем. В CI — `locmem`.                                   |
 | `DEFAULT_FROM_EMAIL`     |     Нет     | `Hop & Barley <noreply@hopandbarley.com>` | Адрес отправителя.                                                         |
-
+| `REDIS_URL`              | Для prod    | `redis://redis:6379/0` (в Docker)         | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода)  |
 ---
 
 ## Реализованная бизнес-логика
@@ -927,9 +928,11 @@ poetry run pre-commit install
 
 - Раздел 3.9 ТЗ (бонус) **реализован** на Strawberry GraphQL.
 - Аналитические резолверы защищены `@staff_only` — обычные пользователи получают `FORBIDDEN`, гости — `UNAUTHENTICATED`.
-- **Кеширование аналитических метрик** реализовано через декоратор `config/graphql/cache.py:@cache_metric`. Backend по
-  умолчанию — `LocMemCache` (in-memory, подходит для dev и одного воркера). Для продакшена достаточно добавить в
-  `CACHES` backend `RedisCache` — код резолверов менять не нужно.
+- **Кеширование аналитических метрик** реализовано через `@cache_metric`.
+  Backend — Redis (`django.core.cache.backends.redis.RedisCache`) в проде.
+  В dev и test — fallback на `LocMemCache`, если `REDIS_URL` не задан.
+  В `config/settings/prod.py` — fail-fast: без `REDIS_URL` приложение
+  не стартует, чтобы не работать «вроде бы, но кеш в каждом воркере свой».
 - **TTL для метрик разный**: `out_of_stock` — 60 сек (критично для UX), `low_stock` — 120 сек, `popular_products` и
   `repeat_purchase_trend` — 600 сек (статистика за всё время меняется медленно), остальные — 300 сек.
 - **Инвалидации по сигналам нет** — метрики «догоняют» данные через TTL. При необходимости — `cache.clear()` вручную или

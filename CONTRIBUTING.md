@@ -36,7 +36,8 @@
 | Python | 3.12+ |
 | **Poetry** | **2.0+** |
 | PostgreSQL | 16 (для тестов и продакшена) |
-| Docker | 24+ (опционально, для БД) |
+| **Redis** | **7+** (кеш аналитических метрик GraphQL) |
+| Docker | 24+ (опционально, для БД и Redis) |
 | Git | 2.40+ |
 
 **Установка Poetry** (если не установлена):
@@ -66,13 +67,22 @@ cp .env.example .env
 # Отредактируйте DJANGO_SECRET_KEY:
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
-# 5. Применить миграции
+# 5. Поднять PostgreSQL и Redis (локально через Docker)
+docker compose up -d db redis
+# Или по отдельности:
+#   docker run -d --name hop-db -p 5432:5432 -e POSTGRES_DB=hopbarley -e POSTGRES_USER=user -e POSTGRES_PASSWORD=change-me postgres:16
+#   docker run -d --name hop-redis -p 6379:6379 redis:7-alpine
+
+# 6. Прописать REDIS_URL в .env (если ещё не прописан)
+echo "REDIS_URL=redis://localhost:6379/0" >> .env
+
+# 7. Применить миграции
 poetry run python manage.py migrate
 
-# 6. Создать администратора
+# 8. Создать администратора
 poetry run python manage.py createsuperuser
 
-# 7. Запустить сервер разработки
+# 9. Запустить сервер разработки
 poetry run python manage.py runserver
 ```
 
@@ -94,11 +104,31 @@ poetry show --only main
 poetry show --only dev
 ```
 
-### Docker (опционально, для PostgreSQL)
+### Docker (опционально, для PostgreSQL и Redis)
 
 ```bash
-docker compose up -d db           # только БД
-docker compose up --build -d      # весь стек
+docker compose up -d db redis           # только БД и кеш
+docker compose up --build -d            # весь стек (db + redis + web)
+```
+
+### Проверка Redis
+
+Убедиться, что кеш работает через Redis, а не через fallback `LocMemCache`:
+
+```bash
+poetry run python manage.py shell -c "
+from django.core.cache import cache
+cache.set('ping', 'pong', 10)
+print(cache.__class__.__name__, cache.get('ping'))
+"
+# Ожидаем: RedisCache pong
+```
+
+Если вывело `LocMemCache` — значит `REDIS_URL` не подхватился. Проверь `.env` и запущен ли Redis:
+
+```bash
+redis-cli ping
+# → PONG
 ```
 
 ---
@@ -237,6 +267,26 @@ def decorator[F: Callable[..., Any]](func: F) -> F: ...
 
 Параметры типа объявляются прямо в сигнатуре функции — до `(...)`.
 
+### Кеширование
+
+Аналитические метрики GraphQL кешируются через `@cache_metric` (см. `config/graphql/cache.py`). При работе с кешем помни:
+
+- **Backend абстрагирован.** Декоратор работает через `django.core.cache`, конкретный backend (Redis или LocMemCache) выбирается в настройках. Резолверы об этом не знают.
+- **`REDIS_URL` — единственная точка конфигурации.** Задан → `RedisCache`. Не задан → fallback на `LocMemCache` (только для dev и тестов).
+- **В тестах — всегда `LocMemCache`.** `config/settings/test.py` переопределяет `CACHES`, чтобы тесты не зависели от Redis.
+- **Порядок декораторов — вопрос безопасности.** См. «GraphQL-специфика» выше.
+
+Если добавляешь новый кешируемый резолвер, оборачивай так:
+
+```python
+@strawberry.field
+@staff_only
+@cache_metric(ttl=300, prefix='<домен>')
+def resolver(...): ...
+```
+
+TTL выбирай по частоте изменений данных: 60 сек для «горячих» метрик (`out_of_stock`), 600 сек для медленных (`popular_products`).
+
 ---
 
 ## Pre-commit hooks
@@ -336,6 +386,7 @@ dependencies = [
     "django==6.1.1",
     "strawberry-graphql (>=0.327.7,<0.328.0)",
     "strawberry-graphql-django (>=0.89.2,<0.90.0)",
+    "redis==6.4.0",
     ...
 ]
 
@@ -427,11 +478,11 @@ poetry lock
 ### Запуск тестов
 
 ```bash
-# Быстро, на SQLite in-memory
+# Быстро, на SQLite in-memory + LocMemCache
 poetry run pytest --ds=config.settings.test
 
-# Как в CI, на PostgreSQL
-docker compose up -d db
+# Как в CI, на PostgreSQL + Redis
+docker compose up -d db redis
 poetry run pytest --ds=config.settings.ci --create-db --migrations
 
 # Только GraphQL-тесты, быстро (без coverage)
@@ -440,6 +491,21 @@ poetry run pytest tests/graphql/ --ds=config.settings.test --no-cov -v
 # С покрытием
 poetry run pytest --ds=config.settings.test --cov=. --cov-report=html
 ```
+
+### Проверка Redis-интеграции
+
+Локальные тесты идут на `LocMemCache` (см. `config/settings/test.py`), поэтому **явную проверку Redis-интеграции** можно сделать отдельно:
+
+```bash
+# Убедиться, что backend действительно Redis
+poetry run python manage.py shell -c "
+from django.core.cache import cache
+print(cache.__class__.__name__)
+"
+# Ожидаем: RedisCache (если REDIS_URL задан и Redis запущен)
+```
+
+Для интеграционного теста — `tests/integration/test_redis_cache.py` (если добавлен в проект). Он помечен `pytest.mark.skipif` и запускается только при наличии `REDIS_URL`.
 
 ### Структура тестов
 
@@ -454,7 +520,7 @@ poetry run pytest --ds=config.settings.test --cov=. --cov-report=html
 - **Фикстуры** — в глобальном `conftest.py`. В том числе:
   - `staff_user` — staff без superuser (для проверки аналитики).
   - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
-  - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста. Без неё `LocMemCache` живёт между тестами и ломает изоляцию: тест, прогревающий аналитический резолвер, «протечёт» в следующий тест и вернёт устаревшие данные.
+  - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста. Без неё кеш живёт между тестами и ломает изоляцию: тест, прогревающий аналитический резолвер, «протечёт» в следующий тест и вернёт устаревшие данные.
 
 ### Тестирование GraphQL с JWT
 
@@ -483,6 +549,7 @@ def test_analytics_available_for_staff(staff_token: str) -> None:
 
 - **Кеш не сбрасывается между тестами автоматически.** Autouse-фикстура `_clear_cache` в `conftest.py` решает это.
 - **Проверка прав должна идти до кеша.** Это покрыто тестом `test_permissions_checked_before_cache` — если кто-то поменяет порядок декораторов, тест упадёт.
+- **Тесты работают на `LocMemCache`.** В `config/settings/test.py` `CACHES` жёстко указывает на `LocMemCache`, чтобы не зависеть от поднятого Redis. Если хочешь проверить именно Redis — отдельный тест с `pytest.mark.skipif`.
 
 ---
 
@@ -532,6 +599,11 @@ test(graphql): покрыть права доступа и orderMetrics
 test(graphql): покрыть кеш метрик и порядок проверки прав
 docs(readme): описать схему и примеры запросов в README
 
+# Redis / кеш
+feat(cache): подключить Redis как backend для кеша аналитики
+chore(deps): добавить redis для кеша аналитических метрик
+chore(infra): поднять Redis в docker-compose и CI
+
 # Pre-commit
 chore: настроить pre-commit hooks
 chore(ci): обновить pre-commit hooks
@@ -570,7 +642,7 @@ git rebase origin/dev_3st_week
 
 Обновите `README.md`, если меняли:
 - публичное API (REST или GraphQL),
-- переменные окружения,
+- переменные окружения (в том числе `REDIS_URL`),
 - структуру проекта,
 - зависимости.
 
@@ -646,12 +718,13 @@ poetry run pytest --ds=config.settings.test
 ### Полная симуляция CI
 
 ```bash
-docker compose up -d db
+docker compose up -d db redis
 
 export DJANGO_SETTINGS_MODULE=config.settings.ci
 export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
+export REDIS_URL=redis://localhost:6379/0
 
 poetry run ruff check . && \
 poetry run ruff format --check . && \
@@ -690,6 +763,7 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 - ОС: Ubuntu 24.04
 - Python: 3.12.3
 - Poetry: 2.x.x (вывод `poetry --version`)
+- Redis: 7.x.x (`redis-cli --version`)
 - Ветка: `dev_3st_week`
 - Коммит: `a1b2c3d`
 - `DJANGO_SETTINGS_MODULE`: `config.settings.development`
@@ -718,6 +792,8 @@ Traceback (most recent call last):
 - [PEP 735](https://peps.python.org/pep-0735/) — dependency groups
 - [PEP 695](https://peps.python.org/pep-0695/) — параметризованные функции и классы
 - [pre-commit docs](https://pre-commit.com/) — фреймворк git-хуков
+- [Redis docs](https://redis.io/docs/) — документация Redis
+- [Django cache framework](https://docs.djangoproject.com/en/stable/topics/cache/) — кеширование в Django
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)
 - [DRF docs](https://www.django-rest-framework.org/)
