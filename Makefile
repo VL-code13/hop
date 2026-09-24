@@ -12,8 +12,8 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help install run worker shell migrate makemigrations test test-all test-graphql \
-        test-products lint format ci up down logs redis-cli psql flush-cache check clean
-
+        test-products test-orders lint format ci up up-redis up-all down logs logs-worker \
+        redis-cli psql flush-cache check clean
 # ─────────────────────────────────────────────────────────────────────────────
 # Помощь
 # ─────────────────────────────────────────────────────────────────────────────
@@ -108,8 +108,14 @@ ci:  ## Полная проверка как в CI перед push
 # Docker
 # ─────────────────────────────────────────────────────────────────────────────
 
-up:  ## Поднять PostgreSQL и Redis
-	docker compose up -d db redis
+up:  ## Поднять PostgreSQL (Redis — системный, если установлен)
+	docker compose up -d db
+
+up-redis:  ## Поднять Redis в Docker (если системного нет)
+	docker compose up -d redis
+
+up-all:  ## Поднять весь стек (db + redis + worker + web) в контейнерах
+	docker compose up --build -d
 
 down:  ## Остановить все контейнеры
 	docker compose down

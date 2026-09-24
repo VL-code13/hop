@@ -57,7 +57,7 @@
 | Статические файлы | WhiteNoise 6.12 | Раздача сжатой кэшируемой статики с манифестным хешированием |
 | СУБД (Production) | PostgreSQL 16 + psycopg 3.3 | Продакшн-база с поддержкой строгой изоляции транзакций |
 | СУБД (Development) | SQLite | Встроенная база для ускоренной локальной разработки |
-| Тестирование | pytest 9.1 + pytest-django + pytest-cov | Набор из 67+ тестов с автоматическим замером покрытия |
+| Тестирование | pytest 9.1 + pytest-django + pytest-cov | Набор из 72+ тестов с автоматическим замером покрытия |
 | Статический анализ | Ruff 0.16 + Mypy 1.13 + django-stubs | Линтинг по PEP 8 и статическая типизация |
 | Контроль качества | pre-commit 4.x | Git-хуки для ruff, mypy, pytest |
 | Автоматизация | Makefile | Шорткаты для типовых команд |
@@ -78,7 +78,7 @@ hop-and-barley/
 │   │   ├── development.py      # SQLite, DEBUG=True, локальная разработка
 │   │   ├── prod.py             # PostgreSQL, Redis (fail-fast), security-настройки
 │   │   ├── test.py             # SQLite in-memory, LocMemCache, CELERY_TASK_ALWAYS_EAGER
-│   │   └── ci.py               # PostgreSQL + Redis, locmem email, для CI
+│   │   └── ci.py               # PostgreSQL, Redis, CELERY_TASK_ALWAYS_EAGER, locmem email
 │   ├── celery.py               # Celery app + autodiscover_tasks
 │   ├── __init__.py             # экспорт celery_app — точка входа @shared_task
 │   ├── graphql/                # GraphQL-ядро (не Django-приложение!)
@@ -181,8 +181,8 @@ hop-and-barley/
 |------------|--------|-----------|
 | Python | 3.12+ | [python.org](https://www.python.org/downloads/) |
 | Poetry | 2.0+ | `pipx install poetry` или `curl -sSL https://install.python-poetry.org \| python3 -` |
-| PostgreSQL | 16+ | Через Docker (`docker compose up -d db`) |
-| Redis | 7+ | Через Docker или `apt install redis-server` |
+| PostgreSQL | 16+ | Системный или через Docker (`docker compose up -d db`) |
+| Redis | 7+ | Системный (`apt install redis-server`) или через Docker |
 | Docker | 24+ (опционально) | [docs.docker.com](https://docs.docker.com/get-docker/) |
 
 ### Вариант A: Локальная разработка
@@ -219,14 +219,19 @@ poetry run python -c "from django.core.management.utils import get_random_secret
 **4. Поднимите PostgreSQL и Redis:**
 
 ```bash
-make up
+make up           # PostgreSQL (системный, если есть; иначе — Docker через pg_isready)
+make up-redis     # Redis в Docker (если системного нет)
 ```
 
 Или вручную:
 
 ```bash
+# Если системные сервисы уже работают — они и будут использованы.
+# Если нет — поднять Docker-контейнеры:
 docker compose up -d db redis
 ```
+
+> **Важно:** `make up` идемпотентен — если системный PostgreSQL уже слушает `localhost:5432` (проверяется через `pg_isready`), Docker-контейнер не поднимается. Это страхует от `address already in use` на машинах с системными сервисами. То же для `make up-redis` (`redis-cli ping`).
 
 **5. Примените миграции и создайте администратора:**
 
@@ -309,10 +314,13 @@ make run             # запустить dev-сервер
 make worker          # запустить Celery worker
 make test            # быстрые тесты на SQLite
 make test-graphql    # только тесты GraphQL
+make test-orders     # только тесты заказов (включая email)
 make lint            # проверка ruff + mypy
 make format          # автоформатирование
 make ci              # полная симуляция CI перед push
-make up              # поднять db + redis
+make up              # PostgreSQL (системный или Docker)
+make up-redis        # Redis в Docker (если системного нет)
+make up-all          # весь стек в контейнерах
 make flush-cache     # очистить кеш
 ```
 
@@ -329,9 +337,9 @@ make flush-cache     # очистить кеш
 | `POSTGRES_DB` | Для prod/ci | `hopbarley` / `test_db` | Имя базы. |
 | `POSTGRES_USER` | Для prod/ci | `user` / `postgres` | Пользователь БД. |
 | `POSTGRES_PASSWORD` | Для prod/ci | `p@ssword123` / `postgres` | Пароль. |
-| `POSTGRES_HOST` | Для prod/ci | `db` / `localhost` | Хост PostgreSQL. |
+| `POSTGRES_HOST` | Для prod/ci | `localhost` (хост) / `db` (Docker) | Хост PostgreSQL. Для тестов и `runserver` на хосте — `localhost`. Docker Compose переопределяет на `db` для web/worker. |
 | `POSTGRES_PORT` | Нет | `5432` | Порт PostgreSQL. |
-| `REDIS_URL` | Для prod | `redis://redis:6379/0` (в Docker) | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода) |
+| `REDIS_URL` | Для prod | `redis://localhost:6379/0` | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода) |
 | `CELERY_BROKER_URL` | Нет | `redis://localhost:6379/1` | Брокер Celery. Отдельная БД Redis от кеша, чтобы `cache.clear()` не уничтожал очередь. |
 | `CELERY_RESULT_BACKEND` | Нет | `redis://localhost:6379/2` | Хранилище результатов задач Celery. |
 | `EMAIL_BACKEND` | Нет | `console` | Backend отправки писем. В CI — `locmem`. |
@@ -756,6 +764,7 @@ make test            # быстрые тесты на SQLite без coverage
 make test-all        # полный прогон с coverage
 make test-graphql    # только GraphQL
 make test-products   # только каталог
+make test-orders     # только заказы (включая email)
 ```
 
 **Вручную** — если нужны нестандартные флаги:
@@ -765,7 +774,6 @@ make test-products   # только каталог
 poetry run pytest --ds=config.settings.test
 
 # Как в CI, на PostgreSQL + Redis
-docker compose up -d db redis
 poetry run pytest --ds=config.settings.ci --create-db --migrations
 
 # С полным coverage-отчётом
@@ -854,12 +862,12 @@ GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 9. **Run migrations** на PostgreSQL 16 (service container).
 10. **Pytest** — `poetry run pytest --create-db --migrations --cov-fail-under=70`.
 
-CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow). Celery-задачи в CI выполняются в **eager-режиме** — воркер не поднимается.
+CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow). Celery-задачи в CI выполняются в **eager-режиме** (см. `config/settings/ci.py`) — воркер не поднимается.
 
 **Локальная симуляция CI — через Makefile:**
 
 ```bash
-make up      # поднять db + redis
+make up      # поднять db + redis (идемпотентно)
 make ci      # полный прогон всех проверок
 ```
 
@@ -960,19 +968,35 @@ make help
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
 | `make worker` | Запустить Celery worker |
+| `make beat` | Запустить Celery beat (если появится расписание) |
+| `make flower` | Запустить Flower — веб-UI для мониторинга Celery |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
 | `make test-all` | Полный прогон с coverage |
 | `make test-graphql` | Только тесты GraphQL |
+| `make test-products` | Только тесты каталога |
+| `make test-orders` | Только тесты заказов (включая email) |
 | `make lint` | `ruff check` + `ruff format --check` + `mypy` |
 | `make format` | Автоформатирование и автофиксы |
 | `make ci` | Полная симуляция CI перед push |
-| `make up` / `make down` | Поднять/остановить db + redis |
+| `make up` | PostgreSQL (системный или Docker через `pg_isready`) |
+| `make up-redis` | Redis в Docker (если системного нет) |
+| `make up-all` | Весь стек (db + redis + worker + web) в контейнерах |
+| `make down` | Остановить все контейнеры |
+| `make logs` | Логи web-контейнера |
+| `make logs-worker` | Логи Celery-воркера |
 | `make redis-cli` | Зайти в `redis-cli` |
 | `make psql` | Зайти в `psql` контейнера БД |
 | `make flush-cache` | Очистить весь кеш |
+| `make check` | Django system check |
 | `make clean` | Удалить артефакты (pycache, htmlcov, .pytest_cache) |
+
+### `make up` идемпотентен
+
+`make up` проверяет через `pg_isready -h localhost -p 5432`, работает ли системный PostgreSQL. Если да — ничего не делает. Если нет — поднимает Docker-контейнер. То же для `make up-redis` (`redis-cli ping`).
+
+Это страхует от падений с `address already in use` на машинах, где уже работают системные сервисы.
 
 ### Типичный день
 

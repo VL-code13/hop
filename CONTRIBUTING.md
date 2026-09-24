@@ -67,7 +67,8 @@ cp .env.example .env
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
 # 4. Поднять PostgreSQL и Redis
-make up
+make up           # PostgreSQL (системный, если есть; иначе — Docker)
+make up-redis     # Redis в Docker (если системного нет)
 
 # 5. Применить миграции
 make migrate
@@ -103,7 +104,10 @@ cp .env.example .env
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
 # 5. Поднять PostgreSQL и Redis
-docker compose up -d db redis
+#    make up идемпотентен: если системные сервисы уже работают —
+#    Docker-контейнеры не поднимаются. Если нет — поднимает Docker.
+make up
+make up-redis
 
 # 6. Прописать URL-ы в .env (если ещё не прописаны)
 echo "REDIS_URL=redis://localhost:6379/0" >> .env
@@ -144,14 +148,17 @@ poetry show --only dev
 ### Docker (опционально, для PostgreSQL и Redis)
 
 ```bash
-make up              # поднять db + redis
-make down            # остановить всё
+make up              # PostgreSQL (системный или Docker — pg_isready решает)
+make up-redis        # Redis в Docker (если системного нет)
+make up-all          # весь стек (db + redis + worker + web) в контейнерах
+make down            # остановить все контейнеры
 make logs            # логи web-контейнера
-
-# Или вручную:
-docker compose up -d db redis           # только БД и кеш
-docker compose up --build -d            # весь стек (db + redis + worker + web)
+make logs-worker     # логи Celery-воркера
 ```
+
+> **`make up` идемпотентен.** Если системный PostgreSQL уже работает —
+> Docker-контейнер не поднимается. Проверка через `pg_isready -h localhost -p 5432`.
+> То же для Redis (`redis-cli ping`). Это страхует от `address already in use`.
 
 ### Проверка Redis
 
@@ -489,17 +496,24 @@ make help
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
 | `make worker` | Запустить Celery worker |
+| `make beat` | Запустить Celery beat (если появится расписание) |
+| `make flower` | Запустить Flower — веб-UI для мониторинга Celery |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
 | `make test-all` | Полный прогон с coverage |
 | `make test-graphql` | Только тесты GraphQL |
 | `make test-products` | Только тесты каталога |
+| `make test-orders` | Только тесты заказов (включая email-уведомления) |
 | `make lint` | `ruff check` + `ruff format --check` + `mypy` |
 | `make format` | Автоформатирование и автофиксы |
 | `make ci` | Полная симуляция CI перед push |
-| `make up` / `make down` | Поднять/остановить db + redis |
+| `make up` | PostgreSQL (системный или Docker через `pg_isready`) |
+| `make up-redis` | Redis в Docker (если системного нет) |
+| `make up-all` | Весь стек (db + redis + worker + web) в контейнерах |
+| `make down` | Остановить все контейнеры |
 | `make logs` | Логи web-контейнера |
+| `make logs-worker` | Логи Celery-воркера |
 | `make redis-cli` | Зайти в `redis-cli` |
 | `make psql` | Зайти в `psql` контейнера БД |
 | `make flush-cache` | Очистить весь кеш |
@@ -650,6 +664,7 @@ make test            # быстрые тесты на SQLite in-memory
 make test-all        # полный прогон с coverage
 make test-graphql    # только GraphQL
 make test-products   # только каталог
+make test-orders     # только заказы (включая email)
 ```
 
 Вручную:
@@ -659,7 +674,6 @@ make test-products   # только каталог
 poetry run pytest --ds=config.settings.test
 
 # Как в CI, на PostgreSQL + Redis
-docker compose up -d db redis
 poetry run pytest --ds=config.settings.ci --create-db --migrations
 
 # С покрытием
@@ -941,7 +955,7 @@ poetry run pytest --ds=config.settings.test
 **Через Makefile:**
 
 ```bash
-make up              # поднять db + redis
+make up              # поднять db + redis (идемпотентно)
 make ci              # полный прогон всех проверок
 ```
 
