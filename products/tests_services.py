@@ -28,9 +28,24 @@ class TestGetCatalogQueryset:
         qs = get_catalog_queryset()
         assert qs.first() == product
 
-    def test_filter_by_category(self, product, category):
+    def test_filter_by_category(self, product_factory, category):
         """Фильтр по слагу категории возвращает только её товары."""
+        product = product_factory(category=category)
         qs = get_catalog_queryset(category_slug=category.slug)
+        assert product in qs
+
+    def test_category_filter_includes_children(self, product_factory, category_factory):
+        """Клик по родительской категории показывает товары из дочерних.
+
+        Регрессионный тест: раньше `?category=hops` возвращал пусто, если
+        товары лежат в подкатегориях (aroma-hops, bittering-hops).
+        """
+        parent = category_factory(name='Хмель', slug='hops')
+        child = category_factory(name='Ароматический хмель', slug='aroma-hops', parent=parent)
+
+        product = product_factory(name='Хмель Citra', slug='citra', category=child)
+
+        qs = get_catalog_queryset(category_slug=parent.slug)
         assert product in qs
 
     def test_filter_by_nonexistent_category_returns_empty(self, product):
