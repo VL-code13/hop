@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',  # JWT аутентификация по ТЗ
     'drf_spectacular',
     'django_filters',
-    'strawberry_django',  # интеграция Strawberry c Django ORM
+    'strawberry_django',  # интеграция Strawberry с Django ORM
     # Приложения проекта
     'products',
     'orders',
@@ -78,25 +78,7 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
 }
-# ─────────────────────────────────────────────────────────────────────────────
-# Strawberry GraphQL (раздел 3.9 ТЗ — бонус)
-# ─────────────────────────────────────────────────────────────────────────────
-# Один эндпоинт /graphql/ для всех запросов: и витрины, и аналитики.
-# Схема собирается из модулей graphql/ каждого приложения — см. config/graphql/schema.py
-STRAWBERRY_DJANGO = {
-    # Ограничение сложности запроса на стороне сервера. Защищает от
-    # «запросов-убийц», которые могут обрушить БД аналитики.
-    'MAX_QUERY_DEPTH': 15,
-    # Максимум полей в одном запросе — тоже защита от abuse.
-    'MAX_QUERY_COMPLEXITY': 1000,
-}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MIDDLEWARE — добавляем аутентификацию GraphQL по JWT.
-# ─────────────────────────────────────────────────────────────────────────────
-# Ставим ПОСЛЕ AuthenticationMiddleware (чтобы request.user уже был установлен),
-# но ДО наших вьюх. Наш middleware аккуратно подменяет request.user, если
-# в заголовке Authorization передан валидный Bearer-токен.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -104,7 +86,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'config.graphql.middleware.GraphQLJWTAuthMiddleware',
+    'config.graphql.middleware.GraphQLJWTAuthMiddleware',  # JWT для /graphql/
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -168,6 +150,40 @@ STORAGES = {
 # Также можно отключить строгость поиска по манифесту:
 WHITENOISE_MANIFEST_STRICT = False
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Кеширование (Redis) — раздел 3.9 ТЗ, кеш аналитических метрик GraphQL
+# ─────────────────────────────────────────────────────────────────────────────
+# Redis используется через django.core.cache.backends.redis.RedisCache —
+# декоратор @cache_metric (config/graphql/cache.py) не знает про конкретный
+# backend, работает с django.core.cache. Смена backend — только здесь.
+#
+# Fallback на LocMemCache, если REDIS_URL не задан:
+#   - удобно для локальной разработки без Redis;
+#   - в тестах (config.settings.test) всегда LocMemCache — см. test.py;
+#   - в prod Redis обязателен (fail-fast в config.settings.prod).
+#
+# ВАЖНО: LocMemCache живёт в памяти процесса. При нескольких воркерах
+# gunicorn каждый процесс имеет свой кеш — метрика, закешированная в
+# одном воркере, не видна в другом. Для продакшена обязательно Redis.
+REDIS_URL = os.getenv('REDIS_URL')
+
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'hopbarley',
+            'TIMEOUT': 300,  # 5 минут — дефолт для всех ключей
+        },
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'hopbarley-cache',
+        },
+    }
 
 # Конфигурация сессий (раздел 3.3 ТЗ: корзина в сессиях)
 CART_SESSION_ID: str = 'cart'

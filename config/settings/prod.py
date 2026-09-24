@@ -22,3 +22,23 @@ DATABASES = {
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 }
+# ─────────────────────────────────────────────────────────────────────────────
+# Кеширование: в проде Redis обязателен
+# ─────────────────────────────────────────────────────────────────────────────
+# Без Redis кеш аналитических метрик работает в каждом воркере gunicorn
+# отдельно — это не кеш, а иллюзия кеша. Лучше упасть при старте с понятной
+# ошибкой, чем обнаружить проблему под нагрузкой.
+if not REDIS_URL:  # noqa: F405
+    raise ImproperlyConfigured(
+        'REDIS_URL не задан. В prod Redis обязателен для кеша аналитики. '
+        'Добавьте REDIS_URL в .env или переменные окружения.'
+    )
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,  # noqa: F405
+        'KEY_PREFIX': 'hopbarley',
+        'TIMEOUT': 300,
+    },
+}
