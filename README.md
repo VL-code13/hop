@@ -1,25 +1,21 @@
 # Hop & Barley — интернет-магазин товаров для крафтового пивоварения
 
-Полнофункциональный веб-сервис на Django 6.1 и Django REST Framework для онлайн-продажи сырья, ингредиентов, рецептурных
-наборов и оборудования для домашнего пивоварения.
+Полнофункциональный веб-сервис на Django 6.1 и Django REST Framework для онлайн-продажи сырья, ингредиентов, рецептурных наборов и оборудования для домашнего пивоварения.
 
-Архитектура построена по принципу разделения ответственности («тонкие контроллеры, толстый слой
-сервисов/сериализаторов»). Использует:
+Архитектура построена по принципу разделения ответственности («тонкие контроллеры, толстый слой сервисов/сериализаторов»). Использует:
 
-- **атомарное списание остатков** через `F()`-выражения и `filter(stock__gte=qty).update(...)` — защита от overselling
-  даже там, где `select_for_update()` не работает;
+- **атомарное списание остатков** через `F()`-выражения и `filter(stock__gte=qty).update(...)` — защита от overselling даже там, где `select_for_update()` не работает;
 - **гибридную сессионную корзину** — работает для анонимных и авторизованных пользователей;
 - **JWT-аутентификацию** через `djangorestframework-simplejwt`;
 - **двухуровневую защиту от двойной оплаты** — `select_for_update` + `UniqueConstraint` на БД;
 - **нормализацию телефонов** через `users/phone.py` — единый формат `+7XXXXXXXXXX` в БД;
 - **DRY бизнес-правило отзывов** — «только после покупки» живёт в `reviews/services.py` и переиспользуется в web и API;
 - **кастомную аналитическую панель** с дашбордом, складским контролем и журналом заказов;
-- **GraphQL-эндпоинт** `/graphql/` на Strawberry — единая точка для аналитических запросов по заказам, товарам и
-  пользователям;
-- **кеширование аналитических метрик** через `@cache_metric` — per-resolver TTL, работает на любом Django cache backend;
-- **pre-commit hooks** для автоматического `ruff`, `ruff-format`, `mypy` и `pytest` перед коммитом и push;
-- **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
+- **GraphQL-эндпоинт** `/graphql/` на Strawberry — единая точка для аналитических запросов по заказам, товарам и пользователям;
 - **кеширование аналитических метрик** через Redis — общий кеш для всех воркеров gunicorn, per-resolver TTL;
+- **pre-commit hooks** для автоматического `ruff`, `ruff-format`, `mypy` и `pytest` перед коммитом и push;
+- **Makefile** со шорткатами для типовых команд (`make ci`, `make test`, `make run`);
+- **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
 
 [![CI](https://github.com/VL-code13/hop/actions/workflows/ci.yml/badge.svg?branch=dev_3st_week)](https://github.com/VL-code13/hop/actions/workflows/ci.yml)
 
@@ -38,29 +34,33 @@
 - [Тестирование и контроль качества](#тестирование-и-контроль-качества)
 - [CI/CD](#cicd)
 - [Панель администратора и аналитика](#панель-администратора-и-аналитика)
+- [Pre-commit hooks](#pre-commit-hooks)
+- [Makefile](#makefile)
 - [Ограничения и известные компромиссы](#ограничения-и-известные-компромиссы)
 
 ---
 
 ## Технологический стек
 
-| Категория             | Технология / Библиотека                                       | Назначение                                                   |
-|-----------------------|---------------------------------------------------------------|--------------------------------------------------------------|
-| Язык                  | Python 3.12                                                   | Runtime                                                      |
-| Менеджер зависимостей | **Poetry 2.x**                                                | Lockfile, изоляция venv, разделение main/dev                 |
-| Бэкенд-платформа      | Django 6.1.1                                                  | Веб-ядро, ORM, маршрутизация, шаблонизатор, сигналы          |
-| REST API              | Django REST Framework 3.18                                    | Сериализация, валидация запросов, ViewSets, permissions      |
-| **GraphQL**           | **Strawberry GraphQL 0.327 + strawberry-graphql-django 0.89** | **Аналитический эндпоинт `/graphql/`**                       |
-| JWT-авторизация       | djangorestframework-simplejwt 5.5.1                           | Выпуск, проверка и ротация Access / Refresh токенов          |
-| Схема OpenAPI         | drf-spectacular 0.30.0                                        | Генерация OpenAPI 3.0, интерактивных Swagger UI и ReDoc      |
-| Статические файлы     | WhiteNoise 6.12                                               | Раздача сжатой кэшируемой статики с манифестным хешированием |
-| СУБД (Production)     | PostgreSQL 16 + psycopg 3.3                                   | Продакшн-база с поддержкой строгой изоляции транзакций       |
-| СУБД (Development)    | SQLite                                                        | Встроенная база для ускоренной локальной разработки          |
-| Тестирование          | pytest 9.1 + pytest-django + pytest-cov                       | Набор из 67+ тестов с автоматическим замером покрытия        |
-| Статический анализ    | Ruff 0.16 + Mypy 1.13 + django-stubs                          | Линтинг по PEP 8 и статическая типизация                     |
-| Контроль качества     | pre-commit 4.6.2                                              | Git-хуки для ruff, mypy, pytest                              |
-| Контейнеризация       | Docker + Docker Compose                                       | Изоляция сервисов веб-приложения и сервера БД                |
-| Кеш                   | Redis 7 + `django.core.cache.RedisCache`                      | Кеширование аналитических метрик GraphQL                     |
+| Категория | Технология / Библиотека | Назначение |
+|-----------|------------------------|------------|
+| Язык | Python 3.12 | Runtime |
+| Менеджер зависимостей | **Poetry 2.x** | Lockfile, изоляция venv, разделение main/dev |
+| Бэкенд-платформа | Django 6.1.1 | Веб-ядро, ORM, маршрутизация, шаблонизатор, сигналы |
+| REST API | Django REST Framework 3.18 | Сериализация, валидация запросов, ViewSets, permissions |
+| **GraphQL** | **Strawberry GraphQL 0.327 + strawberry-graphql-django 0.89** | **Аналитический эндпоинт `/graphql/`** |
+| JWT-авторизация | djangorestframework-simplejwt 5.5.1 | Выпуск, проверка и ротация Access / Refresh токенов |
+| Кеш | Redis 7 + `django.core.cache.RedisCache` | Кеширование аналитических метрик GraphQL |
+| Схема OpenAPI | drf-spectacular 0.30.0 | Генерация OpenAPI 3.0, интерактивных Swagger UI и ReDoc |
+| Статические файлы | WhiteNoise 6.12 | Раздача сжатой кэшируемой статики с манифестным хешированием |
+| СУБД (Production) | PostgreSQL 16 + psycopg 3.3 | Продакшн-база с поддержкой строгой изоляции транзакций |
+| СУБД (Development) | SQLite | Встроенная база для ускоренной локальной разработки |
+| Тестирование | pytest 9.1 + pytest-django + pytest-cov | Набор из 67+ тестов с автоматическим замером покрытия |
+| Статический анализ | Ruff 0.16 + Mypy 1.13 + django-stubs | Линтинг по PEP 8 и статическая типизация |
+| Контроль качества | pre-commit 4.x | Git-хуки для ruff, mypy, pytest |
+| Автоматизация | Makefile | Шорткаты для типовых команд |
+| Контейнеризация | Docker + Docker Compose | Изоляция сервисов (web + db + redis) |
+
 ---
 
 ## Архитектурная структура проекта
@@ -72,11 +72,11 @@ hop-and-barley/
 │       └── ci.yml              # GitHub Actions: ruff, mypy, pytest на PostgreSQL
 ├── config/                     # Настройки проекта
 │   ├── settings/
-│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF, Strawberry
+│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF, Strawberry, CACHES
 │   │   ├── development.py      # SQLite, DEBUG=True, локальная разработка
-│   │   ├── prod.py             # PostgreSQL, security-настройки, строгий WhiteNoise
-│   │   ├── test.py             # SQLite in-memory, MD5-хешер паролей — для pytest
-│   │   └── ci.py               # PostgreSQL, locmem email, для CI и pytest
+│   │   ├── prod.py             # PostgreSQL, Redis (fail-fast), security-настройки
+│   │   ├── test.py             # SQLite in-memory, LocMemCache, MD5-хешер — для pytest
+│   │   └── ci.py               # PostgreSQL + Redis, locmem email, для CI
 │   ├── graphql/                # GraphQL-ядро (не Django-приложение!)
 │   │   ├── cache.py            # @cache_metric — кеширование аналитических резолверов
 │   │   ├── context.py          # GraphQLContext + кастомный HopBarleyGraphQLView
@@ -88,7 +88,7 @@ hop-and-barley/
 │   ├── wsgi.py
 │   └── asgi.py
 ├── products/                   # Каталог товаров и категорий (раздел 3.1 ТЗ)
-│   ├── models.py               # Category, Product (свойство in_stock)
+│   ├── models.py               # Category (иерархия), Product
 │   ├── services.py             # get_catalog_queryset: фильтры, поиск, сортировка
 │   ├── views.py                # ProductListView, ProductDetailView (тонкие CBV)
 │   ├── api_views_products.py   # ProductViewSet
@@ -152,14 +152,16 @@ hop-and-barley/
 ├── templates/                  # Шаблоны оформления
 ├── static/                     # CSS, JS, изображения
 ├── .coveragerc                 # Правила исключений для coverage
-├── .dockerignore
-├── .env.example
-├── docker-compose.yaml
-├── Dockerfile
+├── .dockerignore               # Исключения для Docker build context
+├── .env.example                # Шаблон переменных окружения
+├── .pre-commit-config.yaml     # Конфигурация pre-commit hooks
+├── docker-compose.yaml         # Сервисы: db (PostgreSQL) + redis + web
+├── Dockerfile                  # Multi-stage сборка на Poetry
 ├── pyproject.toml              # Poetry + Ruff + Mypy (единый конфиг)
 ├── poetry.lock                 # Зафиксированные версии зависимостей
 ├── pytest.ini                  # Конфигурация pytest
-├── conftest.py                 # Глобальные pytest-фикстуры (включая JWT и _clear_cache)
+├── conftest.py                 # Глобальные pytest-фикстуры (JWT, _clear_cache)
+├── Makefile                    # Шорткаты для типовых команд
 ├── manage.py
 └── README.md
 ```
@@ -170,13 +172,15 @@ hop-and-barley/
 
 ### Требования
 
-| Инструмент | Версия            | Установка                                                                            |
-|------------|-------------------|--------------------------------------------------------------------------------------|
-| Python     | 3.12+             | [python.org](https://www.python.org/downloads/)                                      |
-| Poetry     | 2.0+              | `pipx install poetry` или `curl -sSL https://install.python-poetry.org \| python3 -` |
-| Docker     | 24+ (опционально) | [docs.docker.com](https://docs.docker.com/get-docker/)                               |
+| Инструмент | Версия | Установка |
+|------------|--------|-----------|
+| Python | 3.12+ | [python.org](https://www.python.org/downloads/) |
+| Poetry | 2.0+ | `pipx install poetry` или `curl -sSL https://install.python-poetry.org \| python3 -` |
+| PostgreSQL | 16+ | Через Docker (`docker compose up -d db`) |
+| Redis | 7+ | Через Docker или `apt install redis-server` |
+| Docker | 24+ (опционально) | [docs.docker.com](https://docs.docker.com/get-docker/) |
 
-### Вариант A: Локальная разработка (SQLite, без Docker)
+### Вариант A: Локальная разработка
 
 **1. Клонируйте репозиторий:**
 
@@ -185,47 +189,65 @@ git clone https://github.com/VL-code13/hop.git
 cd hop
 ```
 
-**2. Установите зависимости через Poetry:**
+**2. Установите зависимости и pre-commit hooks:**
+
+```bash
+make install
+```
+
+Или вручную:
 
 ```bash
 poetry install
+poetry run pre-commit install
+poetry run pre-commit install --hook-type pre-push
 ```
 
-Poetry создаст `.venv/` в проекте и установит все зависимости из `poetry.lock`. Dev-пакеты (`pytest`, `ruff`, `mypy`)
-тоже установятся — они в группе `dev`.
-
-**3. Создайте `.env` (опционально — `development.py` подставляет дефолты):**
+**3. Создайте `.env`:**
 
 ```bash
 cp .env.example .env
-```
-
-Отредактируйте `DJANGO_SECRET_KEY` — можно сгенерировать:
-
-```bash
+# Отредактируйте DJANGO_SECRET_KEY:
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 ```
 
-**4. Примените миграции и создайте администратора:**
+**4. Поднимите PostgreSQL и Redis:**
 
 ```bash
-poetry run python manage.py migrate
+make up
+```
+
+Или вручную:
+
+```bash
+docker compose up -d db redis
+```
+
+**5. Примените миграции и создайте администратора:**
+
+```bash
+make migrate
 poetry run python manage.py createsuperuser
 ```
 
-**5. Запустите сервер:**
+**6. Запустите сервер:**
 
 ```bash
-poetry run python manage.py runserver
+make run
 ```
 
-Приложение: http://127.0.0.1:8000/
-GraphiQL (интерактивный GraphQL-клиент): http://127.0.0.1:8000/graphql/
+**Точки входа:**
 
-> **Совет:** активируйте виртуальное окружение Poetry командой `poetry shell` — тогда `python`, `pytest`, `ruff` будут
-> работать без префикса `poetry run`.
+| Сервис | URL |
+|--------|-----|
+| Каталог магазина | http://127.0.0.1:8000/ |
+| Админ-панель с аналитикой | http://127.0.0.1:8000/admin/ |
+| REST API | http://127.0.0.1:8000/api/ |
+| Swagger UI | http://127.0.0.1:8000/api/docs/ |
+| ReDoc | http://127.0.0.1:8000/api/redoc/ |
+| **GraphiQL (GraphQL IDE)** | **http://127.0.0.1:8000/graphql/** |
 
-### Вариант B: Docker Compose (PostgreSQL + WhiteNoise)
+### Вариант B: Docker Compose
 
 **1. Подготовьте `.env`:**
 
@@ -234,6 +256,7 @@ cp .env.example .env
 # Для PostgreSQL задайте:
 #   DJANGO_SETTINGS_MODULE=config.settings.prod
 #   POSTGRES_HOST=db
+#   REDIS_URL=redis://redis:6379/0
 ```
 
 **2. Запустите контейнеры:**
@@ -250,46 +273,54 @@ docker compose exec web poetry run python manage.py createsuperuser
 docker compose exec web poetry run python manage.py collectstatic --noinput
 ```
 
-**Точки входа:**
+**Точки входа:** те же, что выше, только порт `8080` вместо `8000` (см. `docker-compose.yaml`).
 
-| Сервис                     | URL                                |
-|----------------------------|------------------------------------|
-| Каталог магазина           | http://localhost:8080/             |
-| Админ-панель с аналитикой  | http://localhost:8080/admin/       |
-| REST API                   | http://localhost:8080/api/         |
-| Swagger UI                 | http://localhost:8080/api/docs/    |
-| ReDoc                      | http://localhost:8080/api/redoc/   |
-| **GraphiQL (GraphQL IDE)** | **http://localhost:8080/graphql/** |
+### Шорткаты через Makefile
+
+Все типовые команды обёрнуты в `Makefile`. Полный список — `make help`.
+
+```bash
+make install         # установить зависимости и pre-commit hooks
+make run             # запустить dev-сервер
+make test            # быстрые тесты на SQLite
+make test-graphql    # только тесты GraphQL
+make lint            # проверка ruff + mypy
+make format          # автоформатирование
+make ci              # полная симуляция CI перед push
+make up              # поднять db + redis
+make flush-cache     # очистить кеш
+```
 
 ---
 
 ## Переменные окружения (.env)
 
-| Переменная               | Обязательна | По умолчанию                              | Назначение                                                                 |
-|--------------------------|:-----------:|-------------------------------------------|----------------------------------------------------------------------------|
-| `DJANGO_SECRET_KEY`      |   **Да**    | —                                         | Секретный ключ. Без него — `ImproperlyConfigured`.                         |
-| `DJANGO_SETTINGS_MODULE` |     Нет     | `config.settings.development`             | Какой конфиг использовать: `development`, `prod`, `ci`, `test`.            |
-| `DJANGO_DEBUG`           |     Нет     | `True` (dev) / `False` (prod)             | В `prod.py` guard: `DEBUG=True` разрешён только с `ALLOW_DEBUG_IN_PROD=1`. |
-| `DJANGO_ALLOWED_HOSTS`   |     Нет     | `*` (dev) / `example.com` (prod)          | Список доверенных хостов через запятую.                                    |
-| `POSTGRES_DB`            | Для prod/ci | `hopbarley` / `test_db`                   | Имя базы.                                                                  |
-| `POSTGRES_USER`          | Для prod/ci | `user` / `postgres`                       | Пользователь БД.                                                           |
-| `POSTGRES_PASSWORD`      | Для prod/ci | `p@ssword123` / `postgres`                | Пароль.                                                                    |
-| `POSTGRES_HOST`          | Для prod/ci | `db` / `localhost`                        | Хост PostgreSQL.                                                           |
-| `POSTGRES_PORT`          |     Нет     | `5432`                                    | Порт PostgreSQL.                                                           |
-| `EMAIL_BACKEND`          |     Нет     | `console`                                 | Backend отправки писем. В CI — `locmem`.                                   |
-| `DEFAULT_FROM_EMAIL`     |     Нет     | `Hop & Barley <noreply@hopandbarley.com>` | Адрес отправителя.                                                         |
-| `REDIS_URL`              | Для prod    | `redis://redis:6379/0` (в Docker)         | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода)  |
+| Переменная | Обязательна | По умолчанию | Назначение |
+|------------|:-----------:|--------------|------------|
+| `DJANGO_SECRET_KEY` | **Да** | — | Секретный ключ. Без него — `ImproperlyConfigured`. |
+| `DJANGO_SETTINGS_MODULE` | Нет | `config.settings.development` | Какой конфиг использовать: `development`, `prod`, `ci`, `test`. |
+| `DJANGO_DEBUG` | Нет | `True` (dev) / `False` (prod) | В `prod.py` guard: `DEBUG=True` разрешён только с `ALLOW_DEBUG_IN_PROD=1`. |
+| `DJANGO_ALLOWED_HOSTS` | Нет | `*` (dev) / `example.com` (prod) | Список доверенных хостов через запятую. |
+| `POSTGRES_DB` | Для prod/ci | `hopbarley` / `test_db` | Имя базы. |
+| `POSTGRES_USER` | Для prod/ci | `user` / `postgres` | Пользователь БД. |
+| `POSTGRES_PASSWORD` | Для prod/ci | `p@ssword123` / `postgres` | Пароль. |
+| `POSTGRES_HOST` | Для prod/ci | `db` / `localhost` | Хост PostgreSQL. |
+| `POSTGRES_PORT` | Нет | `5432` | Порт PostgreSQL. |
+| `REDIS_URL` | Для prod | `redis://redis:6379/0` (в Docker) | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода) |
+| `EMAIL_BACKEND` | Нет | `console` | Backend отправки писем. В CI — `locmem`. |
+| `DEFAULT_FROM_EMAIL` | Нет | `Hop & Barley <noreply@hopandbarley.com>` | Адрес отправителя. |
+
 ---
 
 ## Реализованная бизнес-логика
 
 ### Каталог товаров (`products`)
 
-- Расчёт складской доступности через свойство `in_stock`.
-- Полнотекстовый поиск по имени и описанию (`?q=`).
+- Иерархия категорий через `Category.parent` (self-FK).
+- **Фильтр по категории включает дочерние**: клик по «Хмель» показывает товары из «Ароматический хмель» и «Горький хмель».
+- Полнотекстовый поиск по имени и описанию (`?q=`, `icontains`).
 - Диапазонная фильтрация цен и категорий.
-- Сортировка: `newest`, `price_asc`, `price_desc`, `popular`, `name`. Белый список `SORT_MAPPING` защищает от
-  SQL-инъекций через `?sort=`.
+- Сортировка: `newest`, `price_asc`, `price_desc`, `popular`, `name`. Белый список `SORT_MAPPING` защищает от SQL-инъекций через `?sort=`.
 - Пагинация по 9 товаров.
 - Сервисный слой `products/services.py` — вся логика фильтрации в чистой функции `get_catalog_queryset()`.
 
@@ -309,33 +340,29 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
   ```
 
   Это даёт защиту на **двух уровнях**:
-    1. `select_for_update()` блокирует строки на PostgreSQL.
-    2. `filter(stock__gte=qty).update(F(...))` — атомарный SQL-запрос, который работает даже на SQLite (где
-       `select_for_update` — no-op).
+  1. `select_for_update()` блокирует строки на PostgreSQL.
+  2. `filter(stock__gte=qty).update(F(...))` — атомарный SQL-запрос, который работает даже на SQLite.
 
 - **Snapshot цены** в `OrderItem.price`.
 - Email-уведомления покупателю и администраторам с `logger.exception` при сбое SMTP.
 
 ### Отзывы и рейтинги (`reviews`)
 
-- **Двухфакторная проверка**: оставить отзыв (1–5 звёзд) может только авторизованный клиент, ранее купивший и оплативший
-  (`PAID`) или получивший (`DELIVERED`) товар.
+- **Двухфакторная проверка**: оставить отзыв (1–5 звёзд) может только авторизованный клиент, ранее купивший и оплативший (`PAID`) или получивший (`DELIVERED`) товар.
 - `UniqueConstraint(fields=['product', 'user'])` на уровне БД — повторный отзыв невозможен.
-- **DRY-подход**: бизнес-правило вынесено в `reviews/services.py:get_review_permissions()` и **переиспользуется** в
-  web-view и API-сериализаторе.
+- **DRY-подход**: бизнес-правило вынесено в `reviews/services.py:get_review_permissions()` и **переиспользуется** в web-view и API-сериализаторе.
 
 ### Сервис эмуляции платежей (`payments`)
 
 - Изолированный `PaymentService`:
-    - проверяет принадлежность заказа клиенту через `select_for_update().get(id=..., user=user)` — закрывает IDOR
-      архитектурно;
-    - валидирует статус (`Pending` → `Paid`);
-    - ведёт журнал транзакций с UUID-PK.
+  - проверяет принадлежность заказа клиенту через `select_for_update().get(id=..., user=user)` — закрывает IDOR архитектурно;
+  - валидирует статус (`Pending` → `Paid`);
+  - ведёт журнал транзакций с UUID-PK.
 
 - **Трёхуровневая защита от двойной оплаты**:
-    1. Проверка статуса в `get_payable_order`.
-    2. Проверка статуса под `select_for_update` в `process_payment`.
-    3. `UniqueConstraint(fields=['order'], condition=Q(status='SUCCESS'))` на уровне БД.
+  1. Проверка статуса в `get_payable_order`.
+  2. Проверка статуса под `select_for_update` в `process_payment`.
+  3. `UniqueConstraint(fields=['order'], condition=Q(status='SUCCESS'))` на уровне БД.
 
 ### Пользователи и безопасность (`users`)
 
@@ -351,23 +378,23 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 
 Базовый путь: `/api/`. Полная документация — в Swagger UI (`/api/docs/`).
 
-| Метод  | URL                           | Права доступа | Назначение                                    |
-|--------|-------------------------------|---------------|-----------------------------------------------|
-| POST   | `/api/users/register/`        | Любой         | Регистрация нового покупателя                 |
-| POST   | `/api/users/login/`           | Любой         | Получение JWT-пары (access + refresh)         |
-| POST   | `/api/token/refresh/`         | Refresh Token | Ротация access-токена                         |
-| GET    | `/api/products/`              | Любой         | Каталог с пагинацией, фильтрами, поиском      |
-| GET    | `/api/products/{id}/`         | Любой         | Детальная карточка товара                     |
-| GET    | `/api/products/{id}/reviews/` | Любой         | Список отзывов товара                         |
-| POST   | `/api/products/{id}/reviews/` | Bearer JWT    | Добавление отзыва (проверка покупки)          |
-| GET    | `/api/cart/`                  | Session / JWT | Просмотр корзины                              |
-| POST   | `/api/cart/`                  | Session / JWT | Добавление позиции                            |
-| PATCH  | `/api/cart/`                  | Session / JWT | Изменение количества                          |
-| DELETE | `/api/cart/`                  | Session / JWT | Очистка корзины                               |
-| POST   | `/api/orders/`                | Bearer JWT    | Создание заказа (атомарное списание остатков) |
-| GET    | `/api/orders/`                | Bearer JWT    | Список заказов пользователя                   |
-| GET    | `/api/orders/{id}/`           | Bearer JWT    | Детали своего заказа                          |
-| DELETE | `/api/orders/{id}/`           | Bearer JWT    | Отмена заказа (возврат остатков)              |
+| Метод | URL | Права доступа | Назначение |
+|-------|-----|---------------|------------|
+| POST | `/api/users/register/` | Любой | Регистрация нового покупателя |
+| POST | `/api/users/login/` | Любой | Получение JWT-пары (access + refresh) |
+| POST | `/api/token/refresh/` | Refresh Token | Ротация access-токена |
+| GET | `/api/products/` | Любой | Каталог с пагинацией, фильтрами, поиском |
+| GET | `/api/products/{id}/` | Любой | Детальная карточка товара |
+| GET | `/api/products/{id}/reviews/` | Любой | Список отзывов товара |
+| POST | `/api/products/{id}/reviews/` | Bearer JWT | Добавление отзыва (проверка покупки) |
+| GET | `/api/cart/` | Session / JWT | Просмотр корзины |
+| POST | `/api/cart/` | Session / JWT | Добавление позиции |
+| PATCH | `/api/cart/` | Session / JWT | Изменение количества |
+| DELETE | `/api/cart/` | Session / JWT | Очистка корзины |
+| POST | `/api/orders/` | Bearer JWT | Создание заказа (атомарное списание остатков) |
+| GET | `/api/orders/` | Bearer JWT | Список заказов пользователя |
+| GET | `/api/orders/{id}/` | Bearer JWT | Детали своего заказа |
+| DELETE | `/api/orders/{id}/` | Bearer JWT | Отмена заказа (возврат остатков) |
 
 ---
 
@@ -426,25 +453,6 @@ curl -X POST http://localhost:8080/api/orders/ \
   }'
 ```
 
-Ответ `201 Created`:
-
-```json
-{
-  "id": 42,
-  "user": "brewer@example.com",
-  "status": "pending",
-  "total_price": "1100.00",
-  "items": [
-    {
-      "product": 1,
-      "product_name": "Хмель Citra (100г)",
-      "price": "550.00",
-      "quantity": 2
-    }
-  ]
-}
-```
-
 ### 6. Обновление access-токена
 
 ```bash
@@ -457,8 +465,7 @@ curl -X POST http://localhost:8080/api/token/refresh/ \
 
 ## GraphQL API
 
-Эндпоинт `/graphql/` реализован на **Strawberry GraphQL** — type-safe альтернативе Graphene с нативной интеграцией с
-Django ORM через `strawberry-graphql-django`. Раздел 3.9 ТЗ (бонус).
+Эндпоинт `/graphql/` реализован на **Strawberry GraphQL** — type-safe альтернативе Graphene с нативной интеграцией с Django ORM через `strawberry-graphql-django`. Раздел 3.9 ТЗ (бонус).
 
 ### Возможности
 
@@ -476,51 +483,36 @@ Django ORM через `strawberry-graphql-django`. Раздел 3.9 ТЗ (бон
 ### Архитектура
 
 - `config/graphql/schema.py` — корневая схема, собирает Query-классы из доменов.
-- `config/graphql/context.py` — `GraphQLContext` (доступ к `request.user` и per-request кешу) + кастомный
-  `HopBarleyGraphQLView`, переопределяющий `get_context`.
-- `config/graphql/middleware.py` — `GraphQLJWTAuthMiddleware`, читает JWT из заголовка `Authorization: Bearer ...` для
-  путей `/graphql/`.
-- `config/graphql/permissions.py` — декоратор `@staff_only`, бросает `GraphQLError` с `extensions.code`
-  (`UNAUTHENTICATED` / `FORBIDDEN`).
-- `config/graphql/cache.py` — декоратор `@cache_metric`, кеширует результаты тяжёлых аналитических резолверов с
-  per-resolver TTL.
+- `config/graphql/context.py` — `GraphQLContext` (доступ к `request.user` и per-request кешу) + кастомный `HopBarleyGraphQLView`.
+- `config/graphql/middleware.py` — `GraphQLJWTAuthMiddleware`, читает JWT из заголовка `Authorization: Bearer ...`.
+- `config/graphql/permissions.py` — декоратор `@staff_only`, бросает `GraphQLError` с `extensions.code`.
+- `config/graphql/cache.py` — декоратор `@cache_metric`, кеширует результаты тяжёлых аналитических резолверов.
 - `<app>/graphql/types.py` — GraphQL-типы, привязанные к Django-моделям через `@strawberry_django.type`.
 - `<app>/graphql/analytics.py` — резолверы аналитических запросов.
 
 ### Аутентификация
 
-Используется **тот же JWT** от `rest_framework_simplejwt`, что и для REST API. После логина через `/api/users/login/`
-клиент передаёт токен в заголовке:
+Используется **тот же JWT** от `rest_framework_simplejwt`, что и для REST API. После логина через `/api/users/login/` клиент передаёт токен в заголовке:
 
 ```
 Authorization: Bearer <access_token>
 ```
 
-`GraphQLJWTAuthMiddleware` перехватывает запросы к `/graphql/`, проверяет подпись и срок действия, и подставляет
-`request.user`. Если токен отсутствует или невалиден — пользователь остаётся `AnonymousUser`.
+`GraphQLJWTAuthMiddleware` перехватывает запросы к `/graphql/`, проверяет подпись и срок действия, и подставляет `request.user`. Если токен отсутствует или невалиден — пользователь остаётся `AnonymousUser`.
 
 ### Права доступа
 
-| Резолвер                                                       |       Гость        | Обычный юзер | Staff |
-|----------------------------------------------------------------|:------------------:|:------------:|:-----:|
-| `health`                                                       |         ✅         |      ✅      |  ✅   |
-| `me`                                                           |       `null`       |      ✅      |  ✅   |
-| `orderMetrics`, `orderTrends`                                  | ❌ UNAUTHENTICATED | ❌ FORBIDDEN |  ✅   |
-| `popularProducts`, `lowStockProducts`, `outOfStockProducts`    |         ❌         |      ❌      |  ✅   |
-| `userActivity`, `repeatPurchaseTrend`, `customerLifetimeValue` |         ❌         |      ❌      |  ✅   |
+| Резолвер | Гость | Обычный юзер | Staff |
+|----------|:-----:|:------------:|:-----:|
+| `health` | ✅ | ✅ | ✅ |
+| `me` | `null` | ✅ | ✅ |
+| `orderMetrics`, `orderTrends` | ❌ UNAUTHENTICATED | ❌ FORBIDDEN | ✅ |
+| `popularProducts`, `lowStockProducts`, `outOfStockProducts` | ❌ | ❌ | ✅ |
+| `userActivity`, `repeatPurchaseTrend`, `customerLifetimeValue` | ❌ | ❌ | ✅ |
 
-Проверка прав выполняется в декораторе `@staff_only` — **до** тела резолвера, поэтому неавторизованные запросы не
-нагружают БД.
+Проверка прав выполняется в декораторе `@staff_only` — **до** тела резолвера, поэтому неавторизованные запросы не нагружают БД.
 
 ### Примеры запросов
-
-#### Проверка живости
-
-```graphql
-{
-  health
-}
-```
 
 #### Дашборд заказов
 
@@ -590,18 +582,6 @@ query UsersAnalytics {
 }
 ```
 
-#### Текущий пользователь
-
-```graphql
-{
-  me {
-    id
-    username
-    email
-  }
-}
-```
-
 ### Как передать токен в GraphiQL
 
 1. Открой http://127.0.0.1:8000/graphql/
@@ -632,48 +612,39 @@ curl -X POST http://localhost:8000/graphql/ \
 
 ### Производительность
 
-- **Все агрегаты считаются на стороне БД** — `Sum`, `Count`, `Avg`, `Trunc`, `TruncDate/Week/Month`. Никаких питоновских
-  переборов заказов.
-- **`DjangoOptimizerExtension`** автоматически применяет `select_related` / `prefetch_related` там, где резолверы читают
-  связанные поля.
-- **Индексы под аналитику** — составные индексы по `(status, paid_at)` и `(user, created_at)` для быстрой фильтрации.
+- **Все агрегаты считаются на стороне БД** — `Sum`, `Count`, `Avg`, `Trunc`, `TruncDate/Week/Month`.
+- **`DjangoOptimizerExtension`** автоматически применяет `select_related` / `prefetch_related`.
+- **Индексы под аналитику** — составные индексы по `(status, paid_at)` и `(user, created_at)`.
 - **Кеширование метрик** через `@cache_metric` с per-resolver TTL:
-    - `out_of_stock_products` — 60 сек (критично для UX),
-    - `low_stock_products` — 120 сек,
-    - `order_metrics`, `order_trends`, `user_activity`, `customer_lifetime_value` — 300 сек,
-    - `popular_products`, `repeat_purchase_trend` — 600 сек.
+  - `out_of_stock_products` — 60 сек (критично для UX),
+  - `low_stock_products` — 120 сек,
+  - `order_metrics`, `order_trends`, `user_activity`, `customer_lifetime_value` — 300 сек,
+  - `popular_products`, `repeat_purchase_trend` — 600 сек.
 
 ### Кеширование
 
-Кеширование аналитических метрик реализовано в `config/graphql/cache.py` через декоратор `@cache_metric`. Порядок
-декораторов строго:
+Кеширование аналитических метрик реализовано в `config/graphql/cache.py` через декоратор `@cache_metric`. Порядок декораторов строго:
 
 ```python
 @strawberry.field
-@staff_only  # проверка прав — ДО кеша
-@cache_metric(...)  # кеш — только после успешной проверки
+@staff_only              # проверка прав — ДО кеша
+@cache_metric(...)       # кеш — только после успешной проверки
 def resolver(...): ...
 ```
 
-Если поменять местами — обычный пользователь получит данные из кеша в обход `@staff_only`. Это **дыра в безопасности**,
-покрыта регрессионным тестом `test_permissions_checked_before_cache`.
+Если поменять местами — обычный пользователь получит данные из кеша в обход `@staff_only`. Это **дыра в безопасности**, покрыта регрессионным тестом `test_permissions_checked_before_cache`.
 
-**Backend кеша** — `django.core.cache`, дефолт — `LocMemCache` (in-memory). Для продакшена достаточно добавить в
-`CACHES`:
+**Backend кеша** — Redis (`django.core.cache.backends.redis.RedisCache`) в проде. В dev и test — fallback на `LocMemCache`, если `REDIS_URL` не задан. В `config/settings/prod.py` — fail-fast: без `REDIS_URL` приложение не стартует, чтобы не работать «вроде бы, но кеш в каждом воркере свой».
 
-```python
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL'),
-    },
-}
+**Инвалидация.** Сейчас её нет — метрики «догоняют» данные через TTL. Если понадобится мгновенная актуальность — сбрасывайте кеш через `cache.clear()` или сигналы `post_save` на `Order`.
+
+**Проверка Redis:**
+
+```bash
+make flush-cache     # очистить весь кеш
+make redis-cli       # зайти в redis-cli
+redis-cli KEYS "hopbarley:*"   # посмотреть ключи кеша
 ```
-
-Резолверы и декоратор при этом не меняются.
-
-**Инвалидация.** Сейчас её нет — метрики «догоняют» данные через TTL. Если понадобится мгновенная актуальность —
-сбрасывайте кеш через `django.core.cache.cache.clear()` или сигналы `post_save` на `Order`.
 
 ---
 
@@ -692,21 +663,18 @@ CACHES = {
 
 **Жизненный цикл токенов:**
 
-| Параметр                   | Значение |
-|----------------------------|----------|
-| `ACCESS_TOKEN_LIFETIME`    | 60 минут |
-| `REFRESH_TOKEN_LIFETIME`   | 7 дней   |
-| `ROTATE_REFRESH_TOKENS`    | `True`   |
-| `BLACKLIST_AFTER_ROTATION` | `False`  |
+| Параметр | Значение |
+|----------|----------|
+| `ACCESS_TOKEN_LIFETIME` | 60 минут |
+| `REFRESH_TOKEN_LIFETIME` | 7 дней |
+| `ROTATE_REFRESH_TOKENS` | `True` |
+| `BLACKLIST_AFTER_ROTATION` | `False` |
 
 ### GraphQL (аналитика)
 
 - Использует **тот же JWT**, что и REST API — единая точка выпуска токенов.
 - Токен передаётся в стандартном заголовке `Authorization: Bearer ...`.
-- Отдельного механизма аутентификации в GraphQL нет — `GraphQLJWTAuthMiddleware` переиспользует `AccessToken` от
-  SimpleJWT.
-- Эндпоинт `/graphql/` объявлен как `csrf_exempt` — это безопасно, потому что JWT не полагается на cookies, и CSRF-атака
-  технически невозможна.
+- Эндпоинт `/graphql/` объявлен как `csrf_exempt` — это безопасно, потому что JWT не полагается на cookies, и CSRF-атака технически невозможна.
 
 ---
 
@@ -714,11 +682,11 @@ CACHES = {
 
 Схема генерируется `drf-spectacular`:
 
-| Сервис                     | URL             |
-|----------------------------|-----------------|
-| Swagger UI                 | `/api/docs/`    |
-| ReDoc                      | `/api/redoc/`   |
-| OpenAPI YAML               | `/api/schema/`  |
+| Сервис | URL |
+|--------|-----|
+| Swagger UI | `/api/docs/` |
+| ReDoc | `/api/redoc/` |
+| OpenAPI YAML | `/api/schema/` |
 | **GraphiQL (GraphQL IDE)** | **`/graphql/`** |
 
 Проверка схемы на валидность:
@@ -733,33 +701,27 @@ poetry run python manage.py spectacular --validate
 
 ### Запуск тестов
 
-**Сценарий 1 — быстро, на SQLite in-memory:**
+**Через Makefile** — быстро и единообразно:
 
 ```bash
+make test            # быстрые тесты на SQLite без coverage
+make test-all        # полный прогон с coverage
+make test-graphql    # только GraphQL
+make test-products   # только каталог
+```
+
+**Вручную** — если нужны нестандартные флаги:
+
+```bash
+# Быстро, на SQLite in-memory + LocMemCache
 poetry run pytest --ds=config.settings.test
-```
 
-**Сценарий 2 — как в CI, на PostgreSQL:**
-
-```bash
-# 1. Поднять PostgreSQL
-docker compose up -d db
-
-# 2. Прогнать тесты
+# Как в CI, на PostgreSQL + Redis
+docker compose up -d db redis
 poetry run pytest --ds=config.settings.ci --create-db --migrations
-```
 
-**Сценарий 3 — только GraphQL-тесты, без coverage:**
-
-```bash
-poetry run pytest tests/graphql/ --ds=config.settings.test --no-cov -v
-```
-
-**Сценарий 4 — с полным coverage-отчётом:**
-
-```bash
-poetry run pytest --ds=config.settings.test \
-  --cov=. --cov-report=term-missing --cov-report=html
+# С полным coverage-отчётом
+poetry run pytest --ds=config.settings.test --cov=. --cov-report=term-missing --cov-report=html
 ```
 
 HTML-отчёт: `htmlcov/index.html`.
@@ -768,68 +730,55 @@ HTML-отчёт: `htmlcov/index.html`.
 
 Целевой порог — **70%** (`--cov-fail-under=70`).
 
-Декларативные файлы (`apps.py`, `migrations`, `wsgi.py`, `asgi.py`, `urls.py`, `admin.py`, `conftest.py`,
-`*/graphql/types.py`, `*/graphql/__init__.py`) исключены через `.coveragerc`.
+Декларативные файлы (`apps.py`, `migrations`, `wsgi.py`, `asgi.py`, `urls.py`, `admin.py`, `conftest.py`, `*/graphql/types.py`, `*/graphql/__init__.py`) исключены через `.coveragerc`.
 
 ### Структура тестов
 
 - **Модульные тесты приложения** — в `<app>/tests.py`.
-- **Сервисные тесты** — в `<app>/tests_services.py` (без HTTP-клиента).
+- **Сервисные тесты** — в `<app>/tests_services.py`.
 - **Интеграционные GraphQL-тесты** — в `tests/graphql/`:
-    - `test_permissions.py` — аноним / FORBIDDEN / staff / health.
-    - `test_order_analytics.py` — `orderMetrics`, `orderTrends`.
-    - `test_product_analitics.py` — `lowStockProducts`, `popularProducts`, `outOfStockProducts`.
-    - `test_user_queries.py` — `me`, аналитика пользователей.
-    - `test_cache.py` — кеширование метрик и порядок проверки прав относительно кеша.
+  - `test_permissions.py` — аноним / FORBIDDEN / staff / health.
+  - `test_order_analytics.py` — `orderMetrics`, `orderTrends`.
+  - `test_product_analitics.py` — `lowStockProducts`, `popularProducts`, `outOfStockProducts`.
+  - `test_user_queries.py` — `me`, аналитика пользователей.
+  - `test_cache.py` — кеширование метрик и порядок проверки прав относительно кеша.
 - **Фикстуры** — в глобальном `conftest.py`. Включают:
-    - `staff_user` — staff без superuser (для проверки аналитики).
-    - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
-    - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста. Без неё `LocMemCache` живёт между тестами и
-      ломает изоляцию.
+  - `staff_user` — staff без superuser.
+  - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
+  - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста.
 
 ### Статический анализ
 
+**Через Makefile:**
+
 ```bash
-# Линтер
+make lint      # ruff + mypy без изменений
+make format    # автоформатирование
+```
+
+**Вручную:**
+
+```bash
 poetry run ruff check .
-
-# Форматирование
 poetry run ruff format --check .
-
-# Типизация (django-stubs)
 poetry run mypy .
 ```
 
 ### Управление зависимостями
 
 ```bash
-# Добавить основную зависимость
-poetry add <package>
-
-# Добавить dev-зависимость
-poetry add --group dev <package>
-
-# Удалить
-poetry remove <package>
-poetry remove --group dev <package>
-
-# Обновить lock-файл после ручной правки pyproject.toml
-poetry lock
-
-# Показать дерево зависимостей
-poetry show --tree
-
-# Показать только основные / только dev
-poetry show --only main
-poetry show --only dev
+poetry add <package>                  # основная зависимость
+poetry add --group dev <package>      # dev-зависимость
+poetry remove <package>               # удалить
+poetry lock                           # обновить lock после ручной правки
+poetry show --tree                    # дерево зависимостей
 ```
 
 ---
 
 ## CI/CD
 
-GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — запускается на push и pull request в
-ветку `dev_3st_week`.
+GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — запускается на push и pull request в ветку `dev_3st_week`.
 
 **Шаги пайплайна:**
 
@@ -844,15 +793,25 @@ GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 9. **Run migrations** на PostgreSQL 16 (service container).
 10. **Pytest** — `poetry run pytest --create-db --migrations --cov-fail-under=70`.
 
-**Локальная симуляция CI:**
+CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow).
+
+**Локальная симуляция CI — через Makefile:**
 
 ```bash
-docker compose up -d db
+make up      # поднять db + redis
+make ci      # полный прогон всех проверок
+```
+
+**Или вручную:**
+
+```bash
+docker compose up -d db redis
 
 export DJANGO_SETTINGS_MODULE=config.settings.ci
 export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
+export REDIS_URL=redis://localhost:6379/0
 
 poetry run ruff check . && \
 poetry run ruff format --check . && \
@@ -869,22 +828,32 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 
 Кастомный `HopBarleyAdminSite` доступен по адресу `/admin/` и включает инструменты мониторинга (раздел 3.6 ТЗ):
 
-- **Аналитический дашборд**: выручка по оплаченным заказам (`PAID`, `SHIPPED`, `DELIVERED`), счётчик заказов в
-  обработке, число активных клиентов и товаров.
+- **Аналитический дашборд**: выручка по оплаченным заказам (`PAID`, `SHIPPED`, `DELIVERED`), счётчик заказов в обработке, число активных клиентов и товаров.
 - **Складской контроль**: список позиций с критическим остатком (< 5 шт.).
 - **Кастомные actions** в `OrderAdmin`: `mark_as_paid`, `mark_as_shipped`, `show_revenue`.
 - **Массовые действия** в `ProductAdmin`: `make_active`, `make_inactive`.
 - **Финансовые транзакции read-only**: `PaymentTransactionAdmin` запрещает создание и редактирование.
-- **Кастомная страница удаления товара**: товары с историей заказов не удаляются, а деактивируются через `delete_view` +
-  `has_delete_permission`.
 
-Аналогичные метрики доступны через GraphQL-эндпоинт `/graphql/` — для интеграции с внешними дашбордами (Grafana,
-Metabase, BI-системы).
+Аналогичные метрики доступны через GraphQL-эндпоинт `/graphql/` — для интеграции с внешними дашбордами (Grafana, Metabase, BI-системы).
 
 ---
+
 ## Pre-commit hooks
 
-Проект использует [`pre-commit`](https://pre-commit.com/) для автоматической проверки кода перед коммитом. Хуки запускаются **локально** и **до** push — это ловит мелочи (trailing whitespace, order импортов, форматирование) без итерации с CI.
+Проект использует `pre-commit` для автоматической проверки кода **до коммита и push**. Это ловит мелочи (trailing whitespace, order импортов, форматирование) без итерации с CI.
+
+### Установка
+
+```bash
+make install                # устанавливает pre-commit + pre-push хуки
+```
+
+Или вручную:
+
+```bash
+poetry run pre-commit install
+poetry run pre-commit install --hook-type pre-push
+```
 
 ### Что проверяется
 
@@ -901,44 +870,86 @@ Metabase, BI-системы).
 | `mypy` | push | Статическая типизация (через pre-push hook) |
 | `pytest` | push | Тесты (через pre-push hook) |
 
-### Установка
+### Если хук поправил файлы
 
-Хуки ставятся автоматически после `poetry install`:
+`ruff --fix`, `ruff-format` и `end-of-file-fixer` могут **изменить файлы**. Тогда git прервёт коммит. Это нормально:
 
 ```bash
-poetry run pre-commit install
+git add .
+git commit -m "..."
+```
+
+На второй попытке хуки пройдут без правок.
+
 ---
+
+## Makefile
+
+Проект использует **Makefile** со шорткатами для типовых команд. Все команды — тонкие обёртки над `poetry` и `docker compose`. Полный список:
+
+```bash
+make help
+```
+
+### Основные команды
+
+| Команда | Что делает |
+|---------|-----------|
+| `make install` | Установить зависимости + pre-commit hooks |
+| `make run` | Запустить dev-сервер |
+| `make shell` | Открыть Django shell |
+| `make migrate` / `make makemigrations` | Миграции |
+| `make test` | Быстрые тесты на SQLite без coverage |
+| `make test-all` | Полный прогон с coverage |
+| `make test-graphql` | Только тесты GraphQL |
+| `make lint` | `ruff check` + `ruff format --check` + `mypy` |
+| `make format` | Автоформатирование и автофиксы |
+| `make ci` | Полная симуляция CI перед push |
+| `make up` / `make down` | Поднять/остановить db + redis |
+| `make redis-cli` | Зайти в `redis-cli` |
+| `make psql` | Зайти в `psql` контейнера БД |
+| `make flush-cache` | Очистить весь кеш |
+| `make clean` | Удалить артефакты (pycache, htmlcov, .pytest_cache) |
+
+### Типичный день
+
+```bash
+make up              # поднять инфраструктуру
+make migrate         # применить миграции
+make run             # запустить сервер
+
+# ... код ...
+
+make test            # прогнать тесты
+make format          # автоформатирование
+make ci              # полная проверка перед push
+git add . && git commit -m "..." && git push
+```
+
+---
+
 ## Ограничения и известные компромиссы
 
 ### Совместимость с БД
 
-- **`select_for_update()` не работает на SQLite.** Django молча игнорирует этот метод — реальной блокировки строк не
-  происходит. Защита от overselling работает за счёт `filter(stock__gte=qty).update(F('stock') - qty)`, который атомарен
-  на любой БД.
+- **`select_for_update()` не работает на SQLite.** Django молча игнорирует этот метод. Защита от overselling работает за счёт `filter(stock__gte=qty).update(F('stock') - qty)`, атомарного на любой БД.
 - **Разная семантика `NULL`** в сортировках: SQLite и PostgreSQL по-разному упорядочивают `NULL` при `ORDER BY DESC`.
-- **Регистронезависимый поиск** через `icontains` на SQLite не учитывает регистр кириллицы. На PostgreSQL работает
-  корректно.
+- **Регистронезависимый поиск** через `icontains` на SQLite не учитывает регистр кириллицы. На PostgreSQL работает корректно.
 
 ### Асинхронность и фоновые задачи
 
 - **Email-уведомления отправляются синхронно** внутри транзакции чекаута. В продакшене это стоит вынести в Celery.
-- **Нет Celery и Redis** — фоновых задач нет.
+- **Нет Celery** — фоновых задач нет. Redis используется только для кеша.
 
 ### GraphQL
 
 - Раздел 3.9 ТЗ (бонус) **реализован** на Strawberry GraphQL.
-- Аналитические резолверы защищены `@staff_only` — обычные пользователи получают `FORBIDDEN`, гости — `UNAUTHENTICATED`.
-- **Кеширование аналитических метрик** реализовано через `@cache_metric`.
-  Backend — Redis (`django.core.cache.backends.redis.RedisCache`) в проде.
-  В dev и test — fallback на `LocMemCache`, если `REDIS_URL` не задан.
-  В `config/settings/prod.py` — fail-fast: без `REDIS_URL` приложение
-  не стартует, чтобы не работать «вроде бы, но кеш в каждом воркере свой».
-- **TTL для метрик разный**: `out_of_stock` — 60 сек (критично для UX), `low_stock` — 120 сек, `popular_products` и
-  `repeat_purchase_trend` — 600 сек (статистика за всё время меняется медленно), остальные — 300 сек.
-- **Инвалидации по сигналам нет** — метрики «догоняют» данные через TTL. При необходимости — `cache.clear()` вручную или
-  сигнал `post_save` на `Order`.
-- **Подписки (subscriptions) не реализованы** — требуют Django Channels, что выходит за рамки бонусного задания.
-- **Мутации для CRUD в GraphQL отсутствуют** — весь CRUD закрыт через REST API. Дублировать его смысла нет.
+- Аналитические резолверы защищены `@staff_only`.
+- **Кеширование аналитических метрик** реализовано через `@cache_metric`. Backend — Redis в проде, fallback на LocMemCache в dev и test.
+- **TTL для метрик разный**: `out_of_stock` — 60 сек, `low_stock` — 120 сек, `popular_products` и `repeat_purchase_trend` — 600 сек, остальные — 300 сек.
+- **Инвалидации по сигналам нет** — метрики «догоняют» данные через TTL.
+- **Подписки (subscriptions) не реализованы** — требуют Django Channels.
+- **Мутации для CRUD в GraphQL отсутствуют** — весь CRUD закрыт через REST API.
 
 ### Хранение файлов
 
@@ -947,7 +958,7 @@ poetry run pre-commit install
 
 ### Безопасность
 
-- `SECRET_KEY` в Docker Compose берётся из `.env` — для продакшена нужен секрет-менеджер (Vault, AWS Secrets Manager).
+- `SECRET_KEY` в Docker Compose берётся из `.env` — для продакшена нужен секрет-менеджер.
 - `BLACKLIST_AFTER_ROTATION = False` — украденный refresh-токен можно использовать параллельно с новым.
 - `SECURE_HSTS_*`, `SECURE_PROXY_SSL_HEADER` не заданы — при деплое за nginx их надо добавить в `prod.py`.
 
@@ -957,14 +968,13 @@ poetry run pre-commit install
 
 ### Тесты
 
-- Покрытие тестами сфокусировано на бизнес-логике и моделях. Views, сериализаторы и API-контроллеры покрыты частично.
+- Покрытие тестами сфокусировано на бизнес-логике и моделях.
 - GraphQL-тесты покрывают права доступа, ключевые метрики и кеш.
 - Нет тестов на race condition (`select_for_update`) — сложно воспроизвести в `TestCase`.
 
 ### Инфраструктура
 
-- `docker-compose.yaml` собран для учебного запуска. По умолчанию `web`-контейнер использует
-  `config.settings.development` (SQLite), если `DJANGO_SETTINGS_MODULE` не переопределён.
+- `docker-compose.yaml` собран для учебного запуска. Для продакшена нужен `gunicorn` вместо `runserver` (закомментирован в compose) и S3 для медиа.
 - Медиа-файлы в Docker не сохраняются между перезапусками (volume не настроен).
 
 ---

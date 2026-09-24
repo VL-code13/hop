@@ -9,6 +9,7 @@
 - [Git workflow](#git-workflow)
 - [Стандарты кода](#стандарты-кода)
 - [Pre-commit hooks](#pre-commit-hooks)
+- [Makefile — шорткаты для типовых команд](#makefile--шорткаты-для-типовых-команд)
 - [Управление зависимостями (Poetry)](#управление-зависимостями-poetry)
 - [Тестирование](#тестирование)
 - [Коммиты](#коммиты)
@@ -20,7 +21,7 @@
 
 ## Кодекс поведения
 
-- Будьте уважительны в комментариях и ревью.
+- Будьте увазительны в комментариях и ревью.
 - Критикуйте код, а не автора.
 - Задавайте вопросы, если что-то непонятно — лучше уточнить, чем переделать.
 - Не публикуйте личные данные (email, телефоны) в issues и PR.
@@ -48,30 +49,58 @@ pipx install poetry
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-### Установка проекта
+### Установка проекта — через Makefile
+
+Все типовые команды обёрнуты в `Makefile`. Полный список — `make help`.
 
 ```bash
 # 1. Клонировать репозиторий
 git clone https://github.com/VL-code13/hop.git
 cd hop
 
-# 2. Установить все зависимости (main + dev)
+# 2. Установить зависимости и pre-commit hooks
+make install
+
+# 3. Создать .env из шаблона
+cp .env.example .env
+# Отредактируйте DJANGO_SECRET_KEY:
+poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+
+# 4. Поднять PostgreSQL и Redis
+make up
+
+# 5. Применить миграции
+make migrate
+
+# 6. Создать администратора
+poetry run python manage.py createsuperuser
+
+# 7. Запустить сервер
+make run
+```
+
+### Установка проекта — вручную
+
+Если `make` недоступен (например, на Windows без WSL):
+
+```bash
+# 1. Клонировать репозиторий
+git clone https://github.com/VL-code13/hop.git
+cd hop
+
+# 2. Установить зависимости
 poetry install
 
-# 3. Установить git-хуки (pre-commit + pre-push)
+# 3. Установить pre-commit hooks
 poetry run pre-commit install
 poetry run pre-commit install --hook-type pre-push
 
 # 4. Создать .env из шаблона
 cp .env.example .env
-# Отредактируйте DJANGO_SECRET_KEY:
 poetry run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
-# 5. Поднять PostgreSQL и Redis (локально через Docker)
+# 5. Поднять PostgreSQL и Redis
 docker compose up -d db redis
-# Или по отдельности:
-#   docker run -d --name hop-db -p 5432:5432 -e POSTGRES_DB=hopbarley -e POSTGRES_USER=user -e POSTGRES_PASSWORD=change-me postgres:16
-#   docker run -d --name hop-redis -p 6379:6379 redis:7-alpine
 
 # 6. Прописать REDIS_URL в .env (если ещё не прописан)
 echo "REDIS_URL=redis://localhost:6379/0" >> .env
@@ -107,6 +136,11 @@ poetry show --only dev
 ### Docker (опционально, для PostgreSQL и Redis)
 
 ```bash
+make up              # поднять db + redis
+make down            # остановить всё
+make logs            # логи web-контейнера
+
+# Или вручную:
 docker compose up -d db redis           # только БД и кеш
 docker compose up --build -d            # весь стек (db + redis + web)
 ```
@@ -117,18 +151,19 @@ docker compose up --build -d            # весь стек (db + redis + web)
 
 ```bash
 poetry run python manage.py shell -c "
-from django.core.cache import cache
+from django.core.cache import caches
+cache = caches['default']
 cache.set('ping', 'pong', 10)
 print(cache.__class__.__name__, cache.get('ping'))
 "
-# Ожидаем: RedisCache pong
+# Ожидаемо: RedisCache pong
 ```
 
-Если вывело `LocMemCache` — значит `REDIS_URL` не подхватился. Проверь `.env` и запущен ли Redis:
+Если вывело `LocMemCache` — значит `REDIS_URL` не подхватился. Проверь:
 
 ```bash
-redis-cli ping
-# → PONG
+grep REDIS .env            # должно быть REDIS_URL=redis://localhost:6379/0
+redis-cli ping             # → PONG
 ```
 
 ---
@@ -173,6 +208,15 @@ git checkout -b feature/product-reviews
 - **Комментарии** — только для объяснения «почему», а не «что».
 
 ### Линтеры и форматтеры
+
+Через Makefile:
+
+```bash
+make lint       # ruff check + ruff format --check + mypy (без изменений)
+make format     # автоформатирование и автофиксы
+```
+
+Вручную:
 
 ```bash
 # Проверка
@@ -252,9 +296,7 @@ def calculate_total_price(cart_items: list[dict]) -> Decimal:
 
 ```python
 from typing import TypeVar
-
 F = TypeVar('F', bound=Callable[..., Any])
-
 
 def decorator(func: F) -> F: ...
 ```
@@ -295,14 +337,14 @@ TTL выбирай по частоте изменений данных: 60 се�
 
 ### Установка
 
-После клонирования и `poetry install`:
+Устанавливается автоматически через `make install`. Или вручную:
 
 ```bash
 poetry run pre-commit install
 poetry run pre-commit install --hook-type pre-push
 ```
 
-Первая команда — устанавливает `pre-commit` хук (запускается на `git commit`).
+Первая команда — `pre-commit` хук (запускается на `git commit`).
 Вторая — `pre-push` хук (запускается на `git push`, гоняет mypy и pytest).
 
 Один раз на клонирование. Дальше работает автоматически.
@@ -369,6 +411,60 @@ poetry run pre-commit autoupdate
 git add .pre-commit-config.yaml
 git commit -m "chore(ci): обновить pre-commit hooks"
 ```
+
+---
+
+## Makefile — шорткаты для типовых команд
+
+Проект использует `Makefile` со шорткатами для типовых команд. Все цели — тонкие обёртки над `poetry` и `docker compose`.
+
+### Получить список команд
+
+```bash
+make help
+```
+
+### Основные команды
+
+| Команда | Что делает |
+|---------|-----------|
+| `make install` | Установить зависимости + pre-commit hooks |
+| `make run` | Запустить dev-сервер |
+| `make shell` | Открыть Django shell |
+| `make migrate` / `make makemigrations` | Миграции |
+| `make test` | Быстрые тесты на SQLite без coverage |
+| `make test-all` | Полный прогон с coverage |
+| `make test-graphql` | Только тесты GraphQL |
+| `make test-products` | Только тесты каталога |
+| `make lint` | `ruff check` + `ruff format --check` + `mypy` |
+| `make format` | Автоформатирование и автофиксы |
+| `make ci` | Полная симуляция CI перед push |
+| `make up` / `make down` | Поднять/остановить db + redis |
+| `make logs` | Логи web-контейнера |
+| `make redis-cli` | Зайти в `redis-cli` |
+| `make psql` | Зайти в `psql` контейнера БД |
+| `make flush-cache` | Очистить весь кеш |
+| `make check` | Django system check |
+| `make clean` | Удалить артефакты (pycache, htmlcov, .pytest_cache) |
+
+### Типичный день
+
+```bash
+make up              # поднять инфраструктуру
+make migrate         # применить миграции
+make run             # запустить сервер
+
+# ... код ...
+
+make test            # прогнать тесты
+make format          # автоформатирование
+make ci              # полная проверка перед push
+git add . && git commit -m "..." && git push
+```
+
+### Если `make` недоступен
+
+На Windows без WSL — используй команды напрямую (см. разделы ниже). Все `make`-цели — обёртки над `poetry run ...` и `docker compose ...`, ничего магического.
 
 ---
 
@@ -477,6 +573,17 @@ poetry lock
 
 ### Запуск тестов
 
+Через Makefile:
+
+```bash
+make test            # быстрые тесты на SQLite in-memory
+make test-all        # полный прогон с coverage
+make test-graphql    # только GraphQL
+make test-products   # только каталог
+```
+
+Вручную:
+
 ```bash
 # Быстро, на SQLite in-memory + LocMemCache
 poetry run pytest --ds=config.settings.test
@@ -484,9 +591,6 @@ poetry run pytest --ds=config.settings.test
 # Как в CI, на PostgreSQL + Redis
 docker compose up -d db redis
 poetry run pytest --ds=config.settings.ci --create-db --migrations
-
-# Только GraphQL-тесты, быстро (без coverage)
-poetry run pytest tests/graphql/ --ds=config.settings.test --no-cov -v
 
 # С покрытием
 poetry run pytest --ds=config.settings.test --cov=. --cov-report=html
@@ -497,10 +601,9 @@ poetry run pytest --ds=config.settings.test --cov=. --cov-report=html
 Локальные тесты идут на `LocMemCache` (см. `config/settings/test.py`), поэтому **явную проверку Redis-интеграции** можно сделать отдельно:
 
 ```bash
-# Убедиться, что backend действительно Redis
 poetry run python manage.py shell -c "
-from django.core.cache import cache
-print(cache.__class__.__name__)
+from django.core.cache import caches
+print(caches['default'].__class__.__name__)
 "
 # Ожидаем: RedisCache (если REDIS_URL задан и Redis запущен)
 ```
@@ -604,8 +707,9 @@ feat(cache): подключить Redis как backend для кеша анал�
 chore(deps): добавить redis для кеша аналитических метрик
 chore(infra): поднять Redis в docker-compose и CI
 
-# Pre-commit
+# Pre-commit / Makefile
 chore: настроить pre-commit hooks
+chore: добавить Makefile со шорткатами для типовых команд
 chore(ci): обновить pre-commit hooks
 ```
 
@@ -638,13 +742,19 @@ git fetch origin
 git rebase origin/dev_3st_week
 ```
 
-Прогоните все проверки (см. [чек-лист](#чек-лист-перед-push)).
+Прогоните все проверки — минимально:
+
+```bash
+make ci
+```
 
 Обновите `README.md`, если меняли:
 - публичное API (REST или GraphQL),
 - переменные окружения (в том числе `REDIS_URL`),
 - структуру проекта,
 - зависимости.
+
+Обновите `CONTRIBUTING.md`, если добавляли новые команды / процессы (например, новые цели в `Makefile`).
 
 ### Шаблон PR
 
@@ -660,9 +770,9 @@ git rebase origin/dev_3st_week
 ## Как проверено
 
 - [ ] Написаны/обновлены тесты
+- [ ] `make ci` — зелёный
 - [ ] `poetry run pre-commit run --all-files` — зелёный
 - [ ] `poetry run ruff check .` — зелёный
-- [ ] `poetry run ruff format --check .` — зелёный
 - [ ] `poetry run mypy .` — зелёный
 - [ ] `poetry run pytest` — все тесты проходят
 - [ ] Покрытие ≥ 70%
@@ -684,38 +794,57 @@ Closes #<номер issue>
 
 ## Чек-лист перед push
 
-С включёнными pre-commit hook'ами большая часть проверок идёт **автоматически**. Ручной прогон нужен, если:
-
-- ты только что клонировал репозиторий и не установил хуки,
-- хочешь убедиться перед push,
-- CI требует этих проверок в явном виде.
+**Быстрый способ** — через Makefile:
 
 ```bash
-# 1. Линтер
+make ci
+```
+
+`make ci` прогоняет:
+
+1. `poetry check --lock` — lock актуален.
+2. `ruff check .` — линтер.
+3. `ruff format --check .` — форматирование.
+4. `mypy .` — типизация.
+5. `python manage.py check` — Django system check (включая GraphQL-схему).
+6. `python manage.py makemigrations --check --dry-run` — миграции актуальны.
+7. `pytest --cov-fail-under=70` — тесты с покрытием.
+
+**Если `make` недоступен** — вручную:
+
+```bash
+# 1. Lock-файл актуален
+poetry check --lock
+
+# 2. Линтер
 poetry run ruff check .
 poetry run ruff format --check .
 
-# 2. Типизация
+# 3. Типизация
 poetry run mypy .
 
-# 3. Django check
+# 4. Django check
 poetry run python manage.py check
 
-# 4. Миграции актуальны
+# 5. Миграции актуальны
 poetry run python manage.py makemigrations --check --dry-run
-
-# 5. Lock-файл актуален
-poetry check --lock
 
 # 6. Тесты
 poetry run pytest --ds=config.settings.test
 ```
 
-Если **все шесть** зелёные — можно пушить.
-
-**Про pre-commit:** если хуки установлены, шаги 1, 2 и 6 выполняются автоматически при коммите и push. Явный прогон нужен только для дополнительной уверенности.
+**Про pre-commit:** если хуки установлены, шаги 2 и 6 выполняются автоматически при коммите и push. Явный прогон `make ci` нужен для дополнительной уверенности — например, перед PR.
 
 ### Полная симуляция CI
+
+**Через Makefile:**
+
+```bash
+make up              # поднять db + redis
+make ci              # полный прогон всех проверок
+```
+
+**Вручную:**
 
 ```bash
 docker compose up -d db redis
@@ -792,6 +921,7 @@ Traceback (most recent call last):
 - [PEP 735](https://peps.python.org/pep-0735/) — dependency groups
 - [PEP 695](https://peps.python.org/pep-0695/) — параметризованные функции и классы
 - [pre-commit docs](https://pre-commit.com/) — фреймворк git-хуков
+- [GNU Make docs](https://www.gnu.org/software/make/manual/) — документация Makefile
 - [Redis docs](https://redis.io/docs/) — документация Redis
 - [Django cache framework](https://docs.djangoproject.com/en/stable/topics/cache/) — кеширование в Django
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
