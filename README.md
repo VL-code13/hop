@@ -13,8 +13,9 @@
 - **кастомную аналитическую панель** с дашбордом, складским контролем и журналом заказов;
 - **GraphQL-эндпоинт** `/graphql/` на Strawberry — единая точка для аналитических запросов по заказам, товарам и пользователям;
 - **кеширование аналитических метрик** через Redis — общий кеш для всех воркеров gunicorn, per-resolver TTL;
+- **фоновые задачи через Celery** — email-уведомления не блокируют чекаут, retry при сбое SMTP;
 - **pre-commit hooks** для автоматического `ruff`, `ruff-format`, `mypy` и `pytest` перед коммитом и push;
-- **Makefile** со шорткатами для типовых команд (`make ci`, `make test`, `make run`);
+- **Makefile** со шорткатами для типовых команд (`make ci`, `make test`, `make run`, `make worker`);
 - **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
 
 [![CI](https://github.com/VL-code13/hop/actions/workflows/ci.yml/badge.svg?branch=dev_3st_week)](https://github.com/VL-code13/hop/actions/workflows/ci.yml)
@@ -51,6 +52,7 @@
 | **GraphQL** | **Strawberry GraphQL 0.327 + strawberry-graphql-django 0.89** | **Аналитический эндпоинт `/graphql/`** |
 | JWT-авторизация | djangorestframework-simplejwt 5.5.1 | Выпуск, проверка и ротация Access / Refresh токенов |
 | Кеш | Redis 7 + `django.core.cache.RedisCache` | Кеширование аналитических метрик GraphQL |
+| **Фоновые задачи** | **Celery 5.6 + Redis broker** | **Email-уведомления, retry, отложенные операции** |
 | Схема OpenAPI | drf-spectacular 0.30.0 | Генерация OpenAPI 3.0, интерактивных Swagger UI и ReDoc |
 | Статические файлы | WhiteNoise 6.12 | Раздача сжатой кэшируемой статики с манифестным хешированием |
 | СУБД (Production) | PostgreSQL 16 + psycopg 3.3 | Продакшн-база с поддержкой строгой изоляции транзакций |
@@ -59,7 +61,7 @@
 | Статический анализ | Ruff 0.16 + Mypy 1.13 + django-stubs | Линтинг по PEP 8 и статическая типизация |
 | Контроль качества | pre-commit 4.x | Git-хуки для ruff, mypy, pytest |
 | Автоматизация | Makefile | Шорткаты для типовых команд |
-| Контейнеризация | Docker + Docker Compose | Изоляция сервисов (web + db + redis) |
+| Контейнеризация | Docker + Docker Compose | Изоляция сервисов (web + db + redis + worker) |
 
 ---
 
@@ -72,11 +74,13 @@ hop-and-barley/
 │       └── ci.yml              # GitHub Actions: ruff, mypy, pytest на PostgreSQL
 ├── config/                     # Настройки проекта
 │   ├── settings/
-│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF, Strawberry, CACHES
+│   │   ├── base.py             # Базовые параметры, JWT, WhiteNoise, DRF, Strawberry, CACHES, CELERY
 │   │   ├── development.py      # SQLite, DEBUG=True, локальная разработка
 │   │   ├── prod.py             # PostgreSQL, Redis (fail-fast), security-настройки
-│   │   ├── test.py             # SQLite in-memory, LocMemCache, MD5-хешер — для pytest
+│   │   ├── test.py             # SQLite in-memory, LocMemCache, CELERY_TASK_ALWAYS_EAGER
 │   │   └── ci.py               # PostgreSQL + Redis, locmem email, для CI
+│   ├── celery.py               # Celery app + autodiscover_tasks
+│   ├── __init__.py             # экспорт celery_app — точка входа @shared_task
 │   ├── graphql/                # GraphQL-ядро (не Django-приложение!)
 │   │   ├── cache.py            # @cache_metric — кеширование аналитических резолверов
 │   │   ├── context.py          # GraphQLContext + кастомный HopBarleyGraphQLView
@@ -106,13 +110,14 @@ hop-and-barley/
 │   ├── views.py                # CBV корзины и чекаута
 │   ├── api_views_orders.py     # CartAPIView, OrderViewSet
 │   ├── serializers.py          # Атомарный чекаут: F() + select_for_update
+│   ├── tasks.py                # Celery-задачи: send_order_confirmation, notify_admins_new_order
 │   ├── forms.py                # OrderCreateForm + нормализация телефона
 │   ├── context_processors.py   # Инъекция cart в шаблоны
 │   ├── admin.py                # Обработка заказов, аналитика, actions
 │   ├── graphql/
 │   │   ├── types.py            # OrderType, OrderItemType, OrderMetrics, TrendPoint
 │   │   └── analytics.py        # orderMetrics, orderTrends
-│   └── tests.py                # Тесты корзины и списания остатков
+│   └── tests.py                # Тесты корзины, списания остатков и email
 ├── reviews/                    # Отзывы покупателей (раздел 3.2 ТЗ)
 │   ├── models.py               # Review + UniqueConstraint(product, user)
 │   ├── services.py             # get_review_permissions (единое бизнес-правило)
@@ -155,7 +160,7 @@ hop-and-barley/
 ├── .dockerignore               # Исключения для Docker build context
 ├── .env.example                # Шаблон переменных окружения
 ├── .pre-commit-config.yaml     # Конфигурация pre-commit hooks
-├── docker-compose.yaml         # Сервисы: db (PostgreSQL) + redis + web
+├── docker-compose.yaml         # Сервисы: db (PostgreSQL) + redis + worker + web
 ├── Dockerfile                  # Multi-stage сборка на Poetry
 ├── pyproject.toml              # Poetry + Ruff + Mypy (единый конфиг)
 ├── poetry.lock                 # Зафиксированные версии зависимостей
@@ -236,16 +241,31 @@ poetry run python manage.py createsuperuser
 make run
 ```
 
+**7. В отдельном терминале — запустите Celery worker:**
+
+```bash
+make worker
+```
+
+Или вручную:
+
+```bash
+poetry run celery -A config worker -l info
+```
+
+> **Важно:** без воркера email-уведомления не отправятся — задачи будут копиться в Redis. Для локальной разработки без воркера можно поднять `CELERY_TASK_ALWAYS_EAGER=True` в `.env`, но лучше — запустить воркер.
+
 **Точки входа:**
 
-| Сервис | URL |
-|--------|-----|
+| Сервис | URL / где смотреть |
+|--------|---------------------|
 | Каталог магазина | http://127.0.0.1:8000/ |
 | Админ-панель с аналитикой | http://127.0.0.1:8000/admin/ |
 | REST API | http://127.0.0.1:8000/api/ |
 | Swagger UI | http://127.0.0.1:8000/api/docs/ |
 | ReDoc | http://127.0.0.1:8000/api/redoc/ |
 | **GraphiQL (GraphQL IDE)** | **http://127.0.0.1:8000/graphql/** |
+| **Celery worker** | **Логи в терминале (`make worker`)** |
 
 ### Вариант B: Docker Compose
 
@@ -257,6 +277,8 @@ cp .env.example .env
 #   DJANGO_SETTINGS_MODULE=config.settings.prod
 #   POSTGRES_HOST=db
 #   REDIS_URL=redis://redis:6379/0
+#   CELERY_BROKER_URL=redis://redis:6379/1
+#   CELERY_RESULT_BACKEND=redis://redis:6379/2
 ```
 
 **2. Запустите контейнеры:**
@@ -264,6 +286,8 @@ cp .env.example .env
 ```bash
 docker compose up --build -d
 ```
+
+Поднимаются 4 сервиса: `db`, `redis`, `web`, `worker`.
 
 **3. Примените миграции и соберите статику:**
 
@@ -282,6 +306,7 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 ```bash
 make install         # установить зависимости и pre-commit hooks
 make run             # запустить dev-сервер
+make worker          # запустить Celery worker
 make test            # быстрые тесты на SQLite
 make test-graphql    # только тесты GraphQL
 make lint            # проверка ruff + mypy
@@ -307,6 +332,8 @@ make flush-cache     # очистить кеш
 | `POSTGRES_HOST` | Для prod/ci | `db` / `localhost` | Хост PostgreSQL. |
 | `POSTGRES_PORT` | Нет | `5432` | Порт PostgreSQL. |
 | `REDIS_URL` | Для prod | `redis://redis:6379/0` (в Docker) | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода) |
+| `CELERY_BROKER_URL` | Нет | `redis://localhost:6379/1` | Брокер Celery. Отдельная БД Redis от кеша, чтобы `cache.clear()` не уничтожал очередь. |
+| `CELERY_RESULT_BACKEND` | Нет | `redis://localhost:6379/2` | Хранилище результатов задач Celery. |
 | `EMAIL_BACKEND` | Нет | `console` | Backend отправки писем. В CI — `locmem`. |
 | `DEFAULT_FROM_EMAIL` | Нет | `Hop & Barley <noreply@hopandbarley.com>` | Адрес отправителя. |
 
@@ -344,7 +371,8 @@ make flush-cache     # очистить кеш
   2. `filter(stock__gte=qty).update(F(...))` — атомарный SQL-запрос, который работает даже на SQLite.
 
 - **Snapshot цены** в `OrderItem.price`.
-- Email-уведомления покупателю и администраторам с `logger.exception` при сбое SMTP.
+- **Email-уведомления вынесены в Celery** — чекаут не блокируется на SMTP.
+- **Задачи ставятся в очередь через `transaction.on_commit`** — воркер видит заказ только после коммита.
 
 ### Отзывы и рейтинги (`reviews`)
 
@@ -363,6 +391,13 @@ make flush-cache     # очистить кеш
   1. Проверка статуса в `get_payable_order`.
   2. Проверка статуса под `select_for_update` в `process_payment`.
   3. `UniqueConstraint(fields=['order'], condition=Q(status='SUCCESS'))` на уровне БД.
+
+### Фоновые задачи (`orders.tasks`)
+
+- `send_order_confirmation(order_id)` — письмо покупателю, до 3 повторов с интервалом 60 сек.
+- `notify_admins_new_order(order_id)` — уведомление администраторам, до 2 повторов с интервалом 120 сек.
+- `fail_silently=False` в `send_mail` — исключение всплывает → Celery делает retry.
+- Обе задачи используют `bind=True` и `raise self.retry(exc=exc) from exc` для читаемого traceback.
 
 ### Пользователи и безопасность (`users`)
 
@@ -391,7 +426,7 @@ make flush-cache     # очистить кеш
 | POST | `/api/cart/` | Session / JWT | Добавление позиции |
 | PATCH | `/api/cart/` | Session / JWT | Изменение количества |
 | DELETE | `/api/cart/` | Session / JWT | Очистка корзины |
-| POST | `/api/orders/` | Bearer JWT | Создание заказа (атомарное списание остатков) |
+| POST | `/api/orders/` | Bearer JWT | Создание заказа (атомарное списание остатков, email в Celery) |
 | GET | `/api/orders/` | Bearer JWT | Список заказов пользователя |
 | GET | `/api/orders/{id}/` | Bearer JWT | Детали своего заказа |
 | DELETE | `/api/orders/{id}/` | Bearer JWT | Отмена заказа (возврат остатков) |
@@ -451,6 +486,13 @@ curl -X POST http://localhost:8080/api/orders/ \
     "shipping_address": "г. Москва, ул. Пивоваров, д. 10, кв. 5",
     "payment_method": "card"
   }'
+```
+
+Ответ `201 Created` приходит мгновенно. Email-уведомления отправляются **асинхронно** Celery-воркером — в логах воркера увидите:
+
+```
+[tasks] orders.tasks.send_order_confirmation[abc-123]: succeeded
+[tasks] orders.tasks.notify_admins_new_order[def-456]: succeeded
 ```
 
 ### 6. Обновление access-токена
@@ -676,6 +718,12 @@ redis-cli KEYS "hopbarley:*"   # посмотреть ключи кеша
 - Токен передаётся в стандартном заголовке `Authorization: Bearer ...`.
 - Эндпоинт `/graphql/` объявлен как `csrf_exempt` — это безопасно, потому что JWT не полагается на cookies, и CSRF-атака технически невозможна.
 
+### Celery (фоновые задачи)
+
+- Email-уведомления не блокируют HTTP-ответ — пользователь получает `201 Created` мгновенно.
+- При сбое SMTP задачи ретраятся: до 3 повторов для покупателя, до 2 — для администраторов.
+- Задачи попадают в очередь **только после коммита транзакции чекаута** (`transaction.on_commit`).
+
 ---
 
 ## OpenAPI и интерактивная документация
@@ -747,6 +795,19 @@ HTML-отчёт: `htmlcov/index.html`.
   - `user_token`, `staff_token`, `admin_token` — JWT для запросов к `/graphql/`.
   - `_clear_cache` (autouse) — сбрасывает кеш до и после каждого теста.
 
+### Тестирование Celery
+
+В `config/settings/test.py` установлено:
+
+```python
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+```
+
+Это значит, что `.delay()` в тестах выполняется **синхронно**, без воркера. Redis для тестов не нужен.
+
+Тесты email-уведомлений (`orders/tests.py::OrderEmailNotificationTestCase`) используют `self.captureOnCommitCallbacks(execute=True)` — транзакция в `TestCase` не коммитится, и `transaction.on_commit` без этого не сработал бы.
+
 ### Статический анализ
 
 **Через Makefile:**
@@ -793,7 +854,7 @@ GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 9. **Run migrations** на PostgreSQL 16 (service container).
 10. **Pytest** — `poetry run pytest --create-db --migrations --cov-fail-under=70`.
 
-CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow).
+CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow). Celery-задачи в CI выполняются в **eager-режиме** — воркер не поднимается.
 
 **Локальная симуляция CI — через Makefile:**
 
@@ -812,6 +873,7 @@ export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
 export REDIS_URL=redis://localhost:6379/0
+export CELERY_BROKER_URL=redis://localhost:6379/1
 
 poetry run ruff check . && \
 poetry run ruff format --check . && \
@@ -897,6 +959,7 @@ make help
 |---------|-----------|
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
+| `make worker` | Запустить Celery worker |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
@@ -913,13 +976,23 @@ make help
 
 ### Типичный день
 
+**Терминал 1 — Django:**
+
 ```bash
 make up              # поднять инфраструктуру
 make migrate         # применить миграции
 make run             # запустить сервер
+```
 
-# ... код ...
+**Терминал 2 — Celery worker:**
 
+```bash
+make worker          # фоновые задачи
+```
+
+**После правок кода:**
+
+```bash
 make test            # прогнать тесты
 make format          # автоформатирование
 make ci              # полная проверка перед push
@@ -938,8 +1011,11 @@ git add . && git commit -m "..." && git push
 
 ### Асинхронность и фоновые задачи
 
-- **Email-уведомления отправляются синхронно** внутри транзакции чекаута. В продакшене это стоит вынести в Celery.
-- **Нет Celery** — фоновых задач нет. Redis используется только для кеша.
+- **Email-уведомления вынесены в Celery** (`orders/tasks.py`) — чекаут не блокируется на SMTP.
+- **Задачи ставятся в очередь только после коммита** транзакции (`transaction.on_commit`) — воркер не увидит «полу-созданный» заказ.
+- **Retry при сбое SMTP**: `send_order_confirmation` — до 3 повторов с интервалом 60 сек, `notify_admins_new_order` — до 2 повторов с интервалом 120 сек.
+- **Нет периодических задач** — Celery Beat не настроен, расписания нет.
+- **Flower не подключён** — мониторинг задач только через логи воркера.
 
 ### GraphQL
 
@@ -970,6 +1046,7 @@ git add . && git commit -m "..." && git push
 
 - Покрытие тестами сфокусировано на бизнес-логике и моделях.
 - GraphQL-тесты покрывают права доступа, ключевые метрики и кеш.
+- Тесты email-уведомлений работают через `captureOnCommitCallbacks` и eager-режим Celery.
 - Нет тестов на race condition (`select_for_update`) — сложно воспроизвести в `TestCase`.
 
 ### Инфраструктура

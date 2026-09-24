@@ -37,7 +37,7 @@
 | Python | 3.12+ |
 | **Poetry** | **2.0+** |
 | PostgreSQL | 16 (для тестов и продакшена) |
-| **Redis** | **7+** (кеш аналитических метрик GraphQL) |
+| **Redis** | **7+** (кеш аналитики + брокер Celery) |
 | Docker | 24+ (опционально, для БД и Redis) |
 | Git | 2.40+ |
 
@@ -75,8 +75,11 @@ make migrate
 # 6. Создать администратора
 poetry run python manage.py createsuperuser
 
-# 7. Запустить сервер
+# 7. Запустить сервер (терминал 1)
 make run
+
+# 8. Запустить Celery worker (терминал 2)
+make worker
 ```
 
 ### Установка проекта — вручную
@@ -102,8 +105,10 @@ poetry run python -c "from django.core.management.utils import get_random_secret
 # 5. Поднять PostgreSQL и Redis
 docker compose up -d db redis
 
-# 6. Прописать REDIS_URL в .env (если ещё не прописан)
+# 6. Прописать URL-ы в .env (если ещё не прописаны)
 echo "REDIS_URL=redis://localhost:6379/0" >> .env
+echo "CELERY_BROKER_URL=redis://localhost:6379/1" >> .env
+echo "CELERY_RESULT_BACKEND=redis://localhost:6379/2" >> .env
 
 # 7. Применить миграции
 poetry run python manage.py migrate
@@ -111,8 +116,11 @@ poetry run python manage.py migrate
 # 8. Создать администратора
 poetry run python manage.py createsuperuser
 
-# 9. Запустить сервер разработки
+# 9. Запустить Django (терминал 1)
 poetry run python manage.py runserver
+
+# 10. Запустить Celery worker (терминал 2)
+poetry run celery -A config worker -l info
 ```
 
 ### Полезные команды Poetry
@@ -142,7 +150,7 @@ make logs            # логи web-контейнера
 
 # Или вручную:
 docker compose up -d db redis           # только БД и кеш
-docker compose up --build -d            # весь стек (db + redis + web)
+docker compose up --build -d            # весь стек (db + redis + worker + web)
 ```
 
 ### Проверка Redis
@@ -164,6 +172,26 @@ print(cache.__class__.__name__, cache.get('ping'))
 ```bash
 grep REDIS .env            # должно быть REDIS_URL=redis://localhost:6379/0
 redis-cli ping             # → PONG
+```
+
+### Проверка Celery
+
+Убедиться, что Celery видит задачи и Django-настройки:
+
+```bash
+# Регистрируем задачи (без воркера)
+poetry run celery -A config inspect registered
+# требует запущенного воркера
+
+# Проверка в shell
+poetry run python manage.py shell -c "
+from orders.tasks import send_order_confirmation
+print('Task name:', send_order_confirmation.name)
+print('Broker:', send_order_confirmation.app.conf.broker_url)
+"
+# Ожидаемо:
+# Task name: orders.tasks.send_order_confirmation
+# Broker: redis://localhost:6379/1
 ```
 
 ---
@@ -329,6 +357,36 @@ def resolver(...): ...
 
 TTL выбирай по частоте изменений данных: 60 сек для «горячих» метрик (`out_of_stock`), 600 сек для медленных (`popular_products`).
 
+### Celery-специфика
+
+Email-уведомления и другие фоновые задачи выполняются через Celery. При работе с задачами помни:
+
+- **Импорт моделей — внутри функции.** `from orders.models import Order` внутри `@shared_task` — не в шапке модуля. Иначе получишь циклический импорт (models → tasks → models).
+- **`fail_silently=False` в `send_mail`.** Только так исключение всплывёт и Celery сделает retry. С `fail_silently=True` задача «успешно» завершится, не отправив письмо.
+- **`raise self.retry(exc=exc) from exc`** — обязательно `from exc`. Ruff требует (B904), и трейсбек становится читаемее: видно и оригинальную ошибку SMTP, и служебное `Retry`.
+- **`transaction.on_commit` для запуска задач.** Никогда не вызывай `.delay()` внутри `transaction.atomic()` напрямую — воркер может получить `order_id` до коммита и упасть с `Order.DoesNotExist`.
+- **Отдельная БД Redis для брокера.** `CELERY_BROKER_URL=redis://.../1`, а не `/0`. Иначе `cache.clear()` сбросит очередь задач.
+
+Пример правильной задачи:
+
+```python
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_order_confirmation(self, order_id: int) -> None:
+    from orders.models import Order  # локальный импорт
+
+    try:
+        order = Order.objects.select_related('user').get(pk=order_id)
+    except Order.DoesNotExist:
+        logger.warning('Order #%s not found', order_id)
+        return
+
+    try:
+        send_mail(..., fail_silently=False)
+    except Exception as exc:
+        logger.exception('Failed to send email #%s', order_id)
+        raise self.retry(exc=exc) from exc
+```
+
 ---
 
 ## Pre-commit hooks
@@ -430,6 +488,7 @@ make help
 |---------|-----------|
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
+| `make worker` | Запустить Celery worker |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
@@ -449,13 +508,23 @@ make help
 
 ### Типичный день
 
+**Терминал 1 — Django:**
+
 ```bash
 make up              # поднять инфраструктуру
 make migrate         # применить миграции
 make run             # запустить сервер
+```
 
-# ... код ...
+**Терминал 2 — Celery worker:**
 
+```bash
+make worker          # фоновые задачи (email и др.)
+```
+
+**После правок кода:**
+
+```bash
 make test            # прогнать тесты
 make format          # автоформатирование
 make ci              # полная проверка перед push
@@ -483,6 +552,7 @@ dependencies = [
     "strawberry-graphql (>=0.327.7,<0.328.0)",
     "strawberry-graphql-django (>=0.89.2,<0.90.0)",
     "redis==6.4.0",
+    "celery (>=5.6.3,<6.0.0)",
     ...
 ]
 
@@ -608,7 +678,33 @@ print(caches['default'].__class__.__name__)
 # Ожидаем: RedisCache (если REDIS_URL задан и Redis запущен)
 ```
 
-Для интеграционного теста — `tests/integration/test_redis_cache.py` (если добавлен в проект). Он помечен `pytest.mark.skipif` и запускается только при наличии `REDIS_URL`.
+### Тестирование Celery-задач
+
+В `config/settings/test.py` установлено:
+
+```python
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+```
+
+Это значит, что `.delay()` в тестах выполняется **синхронно**, без воркера. Redis для тестов не нужен — задачи идут в память.
+
+Тесты email-уведомлений используют `self.captureOnCommitCallbacks(execute=True)` — транзакция в `TestCase` не коммитится, и `transaction.on_commit` без этого не сработал бы:
+
+```python
+def _checkout(self) -> None:
+    self.client.login(...)
+    self.client.post(reverse('orders:cart_add', ...), {'quantity': 2})
+    with self.captureOnCommitCallbacks(execute=True):
+        self.client.post(reverse('orders:checkout'), data={...})
+
+def test_checkout_sends_email_to_customer(self) -> None:
+    self._checkout()
+    customer_emails = [m for m in mail.outbox if self.user.email in m.to]
+    self.assertEqual(len(customer_emails), 1)
+```
+
+Полный пример — `orders/tests.py::OrderEmailNotificationTestCase`.
 
 ### Структура тестов
 
@@ -652,7 +748,7 @@ def test_analytics_available_for_staff(staff_token: str) -> None:
 
 - **Кеш не сбрасывается между тестами автоматически.** Autouse-фикстура `_clear_cache` в `conftest.py` решает это.
 - **Проверка прав должна идти до кеша.** Это покрыто тестом `test_permissions_checked_before_cache` — если кто-то поменяет порядок декораторов, тест упадёт.
-- **Тесты работают на `LocMemCache`.** В `config/settings/test.py` `CACHES` жёстко указывает на `LocMemCache`, чтобы не зависеть от поднятого Redis. Если хочешь проверить именно Redis — отдельный тест с `pytest.mark.skipif`.
+- **Тесты работают на `LocMemCache`.** В `config/settings/test.py` `CACHES` жёстко указывает на `LocMemCache`, чтобы не зависеть от поднятого Redis.
 
 ---
 
@@ -700,12 +796,17 @@ fix(graphql): использовать timezone.localdate() вместо timezon
 fix(graphql): квантизовать Decimal до 2 знаков в денежных резолверах
 test(graphql): покрыть права доступа и orderMetrics
 test(graphql): покрыть кеш метрик и порядок проверки прав
-docs(readme): описать схему и примеры запросов в README
 
 # Redis / кеш
 feat(cache): подключить Redis как backend для кеша аналитики
 chore(deps): добавить redis для кеша аналитических метрик
 chore(infra): поднять Redis в docker-compose и CI
+
+# Celery
+feat(celery): вынести email-уведомления в фоновые задачи
+feat(orders): ставить email-задачи через transaction.on_commit
+test(orders): покрыть email-уведомления через captureOnCommitCallbacks
+chore(infra): добавить сервис worker в docker-compose
 
 # Pre-commit / Makefile
 chore: настроить pre-commit hooks
@@ -750,11 +851,11 @@ make ci
 
 Обновите `README.md`, если меняли:
 - публичное API (REST или GraphQL),
-- переменные окружения (в том числе `REDIS_URL`),
+- переменные окружения (в том числе `REDIS_URL`, `CELERY_*`),
 - структуру проекта,
 - зависимости.
 
-Обновите `CONTRIBUTING.md`, если добавляли новые команды / процессы (например, новые цели в `Makefile`).
+Обновите `CONTRIBUTING.md`, если добавляли новые команды / процессы.
 
 ### Шаблон PR
 
@@ -854,6 +955,7 @@ export DJANGO_SECRET_KEY=ci-secret-key-that-is-long-enough-for-hmac-sha256
 export POSTGRES_DB=test_db POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres
 export POSTGRES_HOST=localhost POSTGRES_PORT=5432
 export REDIS_URL=redis://localhost:6379/0
+export CELERY_BROKER_URL=redis://localhost:6379/1
 
 poetry run ruff check . && \
 poetry run ruff format --check . && \
@@ -893,6 +995,7 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 - Python: 3.12.3
 - Poetry: 2.x.x (вывод `poetry --version`)
 - Redis: 7.x.x (`redis-cli --version`)
+- Celery: 5.x.x (`poetry run celery --version`)
 - Ветка: `dev_3st_week`
 - Коммит: `a1b2c3d`
 - `DJANGO_SETTINGS_MODULE`: `config.settings.development`
@@ -902,6 +1005,12 @@ poetry run pytest --create-db --migrations --cov-fail-under=70
 ```
 Traceback (most recent call last):
   File "...", line 42, in ...
+```
+
+## Логи Celery (если проблема с фоновыми задачами)
+
+```
+[2026-09-24 ...] Task orders.tasks.send_order_confirmation[...] raised unexpected: ...
 ```
 ```
 
@@ -923,6 +1032,7 @@ Traceback (most recent call last):
 - [pre-commit docs](https://pre-commit.com/) — фреймворк git-хуков
 - [GNU Make docs](https://www.gnu.org/software/make/manual/) — документация Makefile
 - [Redis docs](https://redis.io/docs/) — документация Redis
+- [Celery docs](https://docs.celeryq.dev/) — документация Celery
 - [Django cache framework](https://docs.djangoproject.com/en/stable/topics/cache/) — кеширование в Django
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)

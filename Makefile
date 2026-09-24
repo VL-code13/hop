@@ -8,10 +8,11 @@
 #   make install     — установить зависимости + pre-commit хуки
 #   make test        — быстрые тесты на SQLite
 #   make ci          — полная симуляция CI перед push
+#   make worker      — запустить Celery worker
 
 .DEFAULT_GOAL := help
-.PHONY: help install run shell migrate makemigrations test test-all test-graphql lint format ci \
-        up down logs redis-cli psql flush-cache check cover clean
+.PHONY: help install run worker shell migrate makemigrations test test-all test-graphql \
+        test-products lint format ci up down logs redis-cli psql flush-cache check clean
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Помощь
@@ -35,6 +36,15 @@ install:  ## Установить зависимости и pre-commit hooks
 
 run:  ## Запустить dev-сервер на 0.0.0.0:8000
 	poetry run python manage.py runserver 0.0.0.0:8000
+
+worker:  ## Запустить Celery worker (фоновые задачи)
+	poetry run celery -A config worker -l info
+
+beat:  ## Запустить Celery beat (если появится расписание)
+	poetry run celery -A config beat -l info
+
+flower:  ## Запустить Flower — веб-UI для мониторинга Celery (по требованию)
+	poetry run celery -A config flower
 
 shell:  ## Открыть Django shell
 	poetry run python manage.py shell
@@ -64,6 +74,9 @@ test-graphql:  ## Только тесты GraphQL
 
 test-products:  ## Только тесты каталога
 	poetry run pytest products/ --ds=config.settings.test --no-cov -v
+
+test-orders:  ## Только тесты заказов (включая email-уведомления)
+	poetry run pytest orders/ --ds=config.settings.test --no-cov -v
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Линтеры и форматирование
@@ -104,6 +117,9 @@ down:  ## Остановить все контейнеры
 logs:  ## Логи web-контейнера
 	docker compose logs -f web
 
+logs-worker:  ## Логи Celery-воркера
+	docker compose logs -f worker
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Отладка инфраструктуры
 # ─────────────────────────────────────────────────────────────────────────────
@@ -116,6 +132,9 @@ psql:  ## Открыть psql в БД из docker-compose
 
 flush-cache:  ## Очистить весь кеш (Redis или LocMem)
 	poetry run python manage.py shell -c "from django.core.cache import cache; cache.clear(); print('Cache cleared')"
+
+check:  ## Django system check (включая GraphQL-схему)
+	poetry run python manage.py check
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Уборка
