@@ -52,6 +52,7 @@ dev = [
 target-version = "py312"
 line-length = 120
 exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4"]
