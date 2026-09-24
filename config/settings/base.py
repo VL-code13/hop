@@ -184,6 +184,25 @@ else:
             'LOCATION': 'hopbarley-cache',
         },
     }
+# ─────────────────────────────────────────────────────────────────────────────
+# Celery — фоновые задачи
+# ─────────────────────────────────────────────────────────────────────────────
+# Redis используется как брокер (отдельная БД от кеша, чтобы cache.clear()
+# не уничтожал очередь задач).
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
+
+# Формат сериализации — JSON безопаснее pickle (нет RCE-рисков)
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+
+# Таймзона для расписания
+CELERY_TIMEZONE = TIME_ZONE  # уже есть в settings
+
+# Retry политика для email-задач
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # Конфигурация сессий (раздел 3.3 ТЗ: корзина в сессиях)
 CART_SESSION_ID: str = 'cart'

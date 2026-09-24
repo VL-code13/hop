@@ -25,6 +25,9 @@ DATABASES = {
         'NAME': ':memory:',
     },
 }
+# Тесты выполняют задачи Celery синхронно (без воркера)
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True  # исключения из задач всплывают в тест
 
 # ─── Кеш: локальный in-memory, не шарится между процессами ───
 CACHES = {
