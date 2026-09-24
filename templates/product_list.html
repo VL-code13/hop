@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Каталог товаров | Hop &amp; Barley{% endblock %}
+
+{% block content %}
+<section class="hero-banner">
+    <img src="{% static 'img/background/hopfen-fields.jpg' %}" alt="Поля хмеля" class="hero-banner__image">
+    <div class="hero-banner__overlay"></div>
+</section>
+
+<div class="container main-content-grid">
+    <!-- Боковая панель фильтрации -->
+    <aside class="sidebar filter-menu">
+        <form method="get" action="{% url 'products:product_list' %}" id="catalog-filter-form">
+            {% if search_query %}
+            <input type="hidden" name="q" value="{{ search_query }}">
+            {% endif %}
+            {% if current_sort %}
+            <input type="hidden" name="sort" value="{{ current_sort }}">
+            {% endif %}
+
+            <div class="sidebar__section">
+                <h3 class="section-title">Категории</h3>
+                <div class="checkbox-group">
+                    <label class="checkbox-container">
+                        Все категории
+                        <input type="radio" name="category" value="" {% if not current_category %}checked{% endif %}
+                               onchange="this.form.submit()">
+                        <span class="checkmark"></span>
+                    </label>
+                    {% for cat in categories %}
+                    <label class="checkbox-container">
+                        {{ cat.name }}
+                        <input type="radio" name="category" value="{{ cat.slug }}" {% if current_category == cat.slug %}checked{% endif %} onchange="this.form.submit()">
+                        <span class="checkmark"></span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="sidebar__section">
+                <h3 class="section-title">Диапазон цен (₽)</h3>
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <input type="number" name="min_price" value="{{ min_price|default:'' }}" placeholder="От" class="search-input"
+                           style="width: 50%; padding: 6px 10px; font-size: 14px;">
+                    <input type="number" name="max_price" value="{{ max_price|default:'' }}" placeholder="До" class="search-input"
+                           style="width: 50%; padding: 6px 10px; font-size: 14px;">
+                </div>
+                <button type="submit" class="button button--secondary" style="width: 100%; padding: 8px;">
+                    Применить
+                </button>
+            </div>
+
+            {% if current_category or min_price or max_price or search_query %}
+            <div class="sidebar__section">
+                <a href="{% url 'products:product_list' %}" class="button button--remove"
+                   style="display: block; text-align: center; text-decoration: none; width: 100%;">
+                    Сбросить фильтры <i class="fa-solid fa-xmark"></i>
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </aside>
+
+    <!-- Основная область витрины -->
+    <section class="products-area product-grid-section">
+        <!-- Панель поиска и сортировки -->
+        <div class="search-sort-bar">
+            <form method="get" action="{% url 'products:product_list' %}" class="search-input-wrapper"
+                  style="display: flex; width: 100%; max-width: 320px;">
+                {% if current_category %}
+                <input type="hidden" name="category" value="{{ current_category }}">
+                {% endif %}
+                {% if current_sort %}
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                {% endif %}
+                <input type="text" name="q" value="{{ search_query|default:'' }}" placeholder="Поиск по названию..."
+                       class="search-input">
+                <button type="submit" class="search-button" aria-label="Найти">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+            </form>
+
+            <div class="sort-options">
+                <a href="{% querystring sort='newest' %}"
+                   class="sort-button {% if current_sort == 'newest' or not current_sort %}active-sort{% endif %}">
+                    Новинки
+                </a>
+                <a href="{% querystring sort='price_asc' %}"
+                   class="sort-button {% if current_sort == 'price_asc' %}active-sort{% endif %}">
+                    Сначала дешевле
+                </a>
+                <a href="{% querystring sort='price_desc' %}"
+                   class="sort-button {% if current_sort == 'price_desc' %}active-sort{% endif %}">
+                    Сначала дороже
+                </a>
+            </div>
+        </div>
+
+        <!-- Сетка товаров -->
+        <div class="product-grid">
+            {% for product in products %}
+                {% partial product_card %}
+            {% empty %}
+            <div style="grid-column: 1 / -1; padding: 40px 0; text-align: center;">
+                <p style="font-size: 18px; color: #a89f91;">Товары по заданным критериям не найдены.</p>
+                <a href="{% url 'products:product_list' %}" class="button button--secondary"
+                   style="display: inline-block; margin-top: 15px;">Сбросить фильтры</a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Пагинация -->
+        {% if is_paginated %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}page={{ page_obj.previous_page_number }}"
+               class="pagination__link pagination__link--prev">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Назад</span>
+            </a>
+            {% else %}
+            <span class="pagination__link pagination__link--prev disabled">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Назад</span>
+            </span>
+            {% endif %}
+
+            <div class="pagination-list">
+                {% for page_num in paginator.page_range %}
+                {% if page_obj.number == page_num %}
+                <span class="pagination__link active">{{ page_num }}</span>
+                {% elif page_num > page_obj.number|add:'-3' and page_num < page_obj.number|add:'3' %}
+                <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}page={{ page_num }}"
+                   class="pagination__link">{{ page_num }}</a>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            {% if page_obj.has_next %}
+            <a href="?{% if current_category %}category={{ current_category }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}{% if current_sort %}sort={{ current_sort }}&{% endif %}{% if min_price %}min_price={{ min_price }}&{% endif %}{% if max_price %}max_price={{ max_price }}&{% endif %}page={{ page_obj.next_page_number }}"
+               class="pagination__link pagination__link--next">
+                <span>Вперед</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </a>
+            {% else %}
+            <span class="pagination__link pagination__link--next disabled">
+                <span>Вперед</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% partialdef product_card %}
+<div class="product-card">
+    <a href="{{ product.get_absolute_url }}" class="product-card-link">
+        <img src="{{ product.display_image_url }}" alt="{{ product.name }}" class="product-card__image">
+        <div class="product-card__info">
+            <h4 class="product-card__name">{{ product.name }}</h4>
+            <p class="product-card__price">{{ product.price }} ₽</p>
+            <p class="product-card__description">{{ product.description|truncatewords:10 }}</p>
+        </div>
+    </a>
+
+    <!-- Блок остатка на складе и быстрой покупки -->
+    <div class="product-card__actions" style="margin-top: auto; border-top: 1px solid #3d3228; padding-top: 12px;">
+        <div style="margin-bottom: 10px; font-size: 13px;">
+            {% if product.stock > 0 %}
+            <span style="color: #4ade80; font-weight: 600;">
+                В наличии: {{ product.stock }} шт.
+            </span>
+            {% else %}
+            <span style="color: #ff5c5c; font-weight: 600;">
+                Нет в наличии
+            </span>
+            {% endif %}
+        </div>
+
+        {% if product.stock > 0 %}
+        <form action="/cart/add/{{ product.id }}/" method="post"
+              style="display: flex; gap: 8px; align-items: center;">
+            {% csrf_token %}
+            <input type="number"
+                   name="quantity"
+                   value="1"
+                   min="1"
+                   max="{{ product.stock }}"
+                   class="Input"
+                   style="width: 60px; height: 38px; text-align: center; box-sizing: border-box; font-size: 14px;"
+                   aria-label="Количество товара"
+                   required>
+            <button type="submit"
+                    class="button button--primary"
+                    style="flex: 1; height: 38px; padding: 0 12px; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-cart-shopping"></i> В корзину
+            </button>
+        </form>
+        {% else %}
+        <button class="button"
+                style="width: 100%; height: 38px; background: #3d3228; color: #8c8275; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px;"
+                disabled>
+            Раскуплено
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% endpartialdef %}

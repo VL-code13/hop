@@ -1,132 +1,152 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout | Hop & Barley</title>
+{% extends 'base.html' %}
+{% load static %}
 
-    <!-- Google Fonts & Font Awesome -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+{% block title %}Оформление заказа | Hop &amp; Barley{% endblock %}
 
-    <!-- Main CSS -->
-    <link rel="stylesheet" href="../static/css/main.css">
-</head>
-<body>
-<!-- Header -->
-<header>
-    <div class="header-container">
-        <a href="home.html" class="header__logo">
-            <img src="../static/img/logo.svg" alt="Hop & Barley Logo">
-            <p class="logo-text">Hop & Barley</p>
-        </a>
-        <nav class="header__nav">
-            <ul>
-                <li><a href="home.html">Products</a></li>
-                <li><a href="guides-recipes.html">Guides & Recipes</a></li>
-                <li><a href="#">Community</a></li>
-                <li><a href="#">Resources</a></li>
-                <li><a href="#">Contact</a></li>
-            </ul>
-        </nav>
-        <div class="header__auth-buttons" id="auth-guest">
-            <a href="login.html" class="button button--secondary">Sign in</a>
-            <a href="register.html" class="button button--primary">Register</a>
-        </div>
-        <div class="header__user-actions" id="auth-user">
-            <a href="account.html" class="user-icon" aria-label="My Account">
-                <img src="../static/img/icons/User_alt.svg" alt="User Account">
-            </a>
-            <a href="cart.html" class="cart-icon" aria-label="Shopping Cart">
-                <img src="../static/img/icons/Shopping_bag.svg" alt="Shopping Cart">
-            </a>
-
-        </div>
-    </div>
-</header>
-
-<!-- Main Content -->
+{% block content %}
 <main class="checkout-page-wrapper">
     <div class="checkout-container">
-        <h1 class="checkout-title">Order Details</h1>
+        <h1 class="checkout-title">Оформление заказа</h1>
 
-        <form id="checkout-form">
-            <!-- Shipping Information -->
-            <section class="checkout-section">
-                <h2 class="checkout-section__title">Shipping information</h2>
-                <div class="checkout-form-group">
-                    <label for="full-name">Full Name</label>
-                    <input type="text" id="full-name" name="full_name" class="Input" placeholder="Value"  required>
-                </div>
-                <div class="checkout-form-group">
-                    <label for="phone">Phone number</label>
-                    <input type="tel" id="phone" name="phone" class="Input" placeholder="Value" required>
-                </div>
-                <div class="checkout-form-group">
-                    <label for="city">City</label>
-                    <input type="text" id="city" name="city" class="Input" placeholder="Value" required>
-                </div>
-                <div class="checkout-form-group">
-                    <label for="address">Shipping address</label>
-                    <textarea id="address" name="address" class="Textarea" placeholder="Value" rows="3" required></textarea>
-                </div>
-            </section>
+        {% if cart %}
+            <form id="checkout-form" method="post" action="{% url 'orders:checkout' %}">
+                {% csrf_token %}
 
-            <!-- Payment Method -->
-            <section class="checkout-section">
-                <h2 class="checkout-section__title">Payment Method</h2>
-                <div class="payment-options">
-                    <label class="radio-option">
-                        <input type="radio" name="payment_method" value="debit" checked>
-                        <span class="radio-custom"></span>
-                        <span class="radio-label">Debit Card</span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="payment_method" value="wallet">
-                        <span class="radio-custom"></span>
-                        <span class="radio-label">Digital Wallet</span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="payment_method" value="cod">
-                        <span class="radio-custom"></span>
-                        <span class="radio-label">Cash On Delivery</span>
-                    </label>
-                </div>
-            </section>
+                <section class="checkout-section">
+                    <h2 class="checkout-section__title">Данные для доставки</h2>
 
-            <!-- Order Summary -->
-            <section class="checkout-summary">
-                <h2 class="checkout-section__title">Order Summary</h2>
-                <div class="summary-details">
-                    <div class="summary-total">
-                        <p>Total</p>
-                        <p>$32.95</p>
+                    <div class="checkout-form-group">
+                        <label for="id_full_name">ФИО получателя</label>
+                        <input type="text"
+                               id="id_full_name"
+                               name="full_name"
+                               class="Input"
+                               placeholder="Иван Иванов"
+                               value="{{ form.full_name.value|default:'' }}"
+                               required>
+                        {% if form.full_name.errors %}
+                            <div class="field-error" style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">
+                                {{ form.full_name.errors.0 }}
+                            </div>
+                        {% endif %}
                     </div>
-                    <button type="submit" class="button button--primary button--pay">Pay</button>
-                </div>
-            </section>
-        </form>
+
+                    <div class="checkout-form-group">
+                        <label for="id_phone">Номер телефона</label>
+                        <input type="tel"
+                               id="id_phone"
+                               name="phone"
+                               class="Input"
+                               placeholder="+7 (999) 000-00-00"
+                               title="Формат: +7 (999) 000-00-00 или 89990000000"
+                               value="{{ form.phone.value|default:'' }}"
+                               required>
+                        {% if form.phone.errors %}
+                            <div class="field-error" style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">
+                                {{ form.phone.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="checkout-form-group">
+                        <label for="id_shipping_address">Адрес доставки</label>
+                        <textarea id="id_shipping_address"
+                                  name="shipping_address"
+                                  class="Textarea"
+                                  placeholder="Город, улица, дом, квартира / офис, индекс"
+                                  rows="3"
+                                  required>{{ form.shipping_address.value|default:'' }}</textarea>
+                        {% if form.shipping_address.errors %}
+                            <div class="field-error" style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">
+                                {{ form.shipping_address.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <section class="checkout-section">
+                    <h2 class="checkout-section__title">Способ оплаты</h2>
+                    <div class="payment-options">
+                        <label class="radio-option">
+                            <input type="radio" name="payment_method" value="card" checked>
+                            <span class="radio-custom"></span>
+                            <span class="radio-label">Банковская карта онлайн</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="payment_method" value="wallet">
+                            <span class="radio-custom"></span>
+                            <span class="radio-label">Электронный кошелек / СБП</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="payment_method" value="cash">
+                            <span class="radio-custom"></span>
+                            <span class="radio-label">Оплата при получении курьеру</span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="checkout-summary">
+                    <h2 class="checkout-section__title">Сводка заказа</h2>
+
+                    <div style="margin-bottom: 20px; border-bottom: 1px solid #3d3228; padding-bottom: 15px;">
+                        {% for item in cart %}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; color: #d6cebf;">
+                                <span>{{ item.product.name }} &times; {{ item.quantity }} шт.</span>
+                                <span>{{ item.total_price }} ₽</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="summary-details">
+                        <div class="summary-total">
+                            <p>Итого к списанию</p>
+                            <p style="color: #e8a84c;">{{ cart.get_total_price }} ₽</p>
+                        </div>
+                        <button type="submit" class="button button--primary button--pay">
+                            Подтвердить заказ
+                        </button>
+                    </div>
+                </section>
+            </form>
+        {% else %}
+            <div style="text-align: center; padding: 50px 20px; background: #241c16; border-radius: 8px; border: 1px solid #3d3228;">
+                <h2 style="color: #f5f0eb;">Ваша корзина пуста</h2>
+                <p style="color: #a89f91; margin: 15px 0 25px;">Вы не можете перейти к оформлению без выбранных товаров.</p>
+                <a href="{% url 'products:product_list' %}" class="button button--primary" style="text-decoration: none;">Перейти в каталог</a>
+            </div>
+        {% endif %}
     </div>
 </main>
+{% endblock %}
 
-<!-- Footer -->
-<footer>
-    <img src="../static/img/background/image-footer.svg" alt="Hop & Barley Hops Logo" class="footer__hops-logo">
-    <nav class="footer__nav">
-        <ul>
-            <li><a href="#">Contact</a></li>
-            <li><a href="#">FAQ</a></li>
-            <li><a href="#">Community</a></li>
-            <li><a href="#">Resources</a></li>
-            <li><a href="#">License</a></li>
-        </ul>
-    </nav>
-    <p class="footer__copyright">© Hop & Barley 2025. All rights reserved</p>
-</footer>
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const phoneInput = document.getElementById('id_phone');
+    if (!phoneInput) return;
 
-<!-- JS -->
-<script src="../static/js/main.js"></script>
-</body>
-</html>
+    phoneInput.addEventListener('input', function (e) {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.startsWith('7') || val.startsWith('8')) {
+            val = val.substring(1);
+        }
+
+        let formatted = '+7 ';
+        if (val.length > 0) {
+            formatted += '(' + val.substring(0, 3);
+        }
+        if (val.length >= 4) {
+            formatted += ') ' + val.substring(3, 6);
+        }
+        if (val.length >= 7) {
+            formatted += '-' + val.substring(6, 8);
+        }
+        if (val.length >= 9) {
+            formatted += '-' + val.substring(8, 10);
+        }
+
+        e.target.value = val.length ? formatted : '';
+    });
+});
+</script>
+{% endblock %}

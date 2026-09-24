@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Корзина покупателя | Hop &amp; Barley{% endblock %}
+
+{% block content %}
+<div class="container cart-page-wrapper">
+  <div class="cart-container">
+    <h1 class="cart-title">Корзина товаров</h1>
+
+    {% if cart %}
+      <div class="cart-items-list" id="cart-items-list">
+        {% for item in cart %}
+          {% partial cart_item %}
+        {% endfor %}
+      </div>
+
+      <div class="cart-summary">
+        <div class="cart-summary__total">
+          <p>Итого к оплате</p>
+          <p id="cart-total-price">{{ cart.get_total_price }} ₽</p>
+        </div>
+        <a href="{% url 'orders:checkout' %}" class="button button--primary button--checkout">
+          Перейти к оформлению
+        </a>
+      </div>
+    {% else %}
+      <div class="empty-cart-block">
+        <i class="fa-solid fa-basket-shopping"></i>
+        <h2>Ваша корзина пуста</h2>
+        <p>Выберите качественные ингредиенты и оборудование в нашем каталоге.</p>
+        <a href="{% url 'products:product_list' %}" class="button button--primary">
+          Перейти в каталог
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% partialdef cart_item %}
+<div class="cart-item" data-price="{{ item.price }}">
+  {% with product=item.product %}
+    <img src="{{ product.display_image_url }}" alt="{{ product.name }}" class="cart-item__image">
+
+    <div class="cart-item__body">
+      <div class="cart-item__details">
+        <h2 class="cart-item__name">
+          <a href="{{ product.get_absolute_url }}" style="color: inherit; text-decoration: none;">
+            {{ product.name }}
+          </a>
+        </h2>
+        <div class="cart-item__price-info">
+          <p class="cart-item__price" data-item-total-price>
+            {{ item.total_price }} ₽
+          </p>
+          <span class="cart-item__price-tag">{{ item.price }} ₽ / шт.</span>
+        </div>
+      </div>
+
+      <div class="cart-item__actions">
+        <div class="cart-item__quantity-selector" style="display: flex; align-items: center; gap: 8px;">
+          {% if item.quantity > 1 %}
+            <form method="post" action="{% url 'orders:cart_update' product.id %}" style="display: inline;">
+              {% csrf_token %}
+              <input type="hidden" name="quantity" value="{{ item.quantity|add:'-1' }}">
+              <button type="submit" class="quantity-btn-cart" aria-label="Уменьшить количество">
+                <i class="fa-solid fa-minus"></i>
+              </button>
+            </form>
+          {% else %}
+            <button class="quantity-btn-cart" disabled style="opacity: 0.4; cursor: not-allowed;">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+          {% endif %}
+
+          <span class="quantity-value-cart" style="font-weight: 600; min-width: 24px; text-align: center;">
+            {{ item.quantity }}
+          </span>
+
+          {% if item.quantity < product.stock %}
+            <form method="post" action="{% url 'orders:cart_update' product.id %}" style="display: inline;">
+              {% csrf_token %}
+              <input type="hidden" name="quantity" value="{{ item.quantity|add:'1' }}">
+              <button type="submit" class="quantity-btn-cart" aria-label="Увеличить количество">
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </form>
+          {% else %}
+            <button class="quantity-btn-cart" disabled style="opacity: 0.4; cursor: not-allowed;" title="Достигнут предел остатка на складе">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          {% endif %}
+        </div>
+
+        <form method="post" action="{% url 'orders:cart_remove' product.id %}" style="display: inline;">
+          {% csrf_token %}
+          <button type="submit" class="button--remove" data-action="remove">
+            Удалить <i class="fa-solid fa-xmark"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  {% endwith %}
+</div>
+{% endpartialdef %}

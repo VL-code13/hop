@@ -1,0 +1,86 @@
+# ─── Сборка ───
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# ─── Poetry-настройки ───
+[tool.poetry]
+package-mode = false
+
+# ─── Метаданные проекта ───
+[project]
+name = "hop-and-barley"
+version = "0.1.0"
+description = "Интернет-магазин товаров для крафтового пивоварения"
+authors = [
+    {name = "VL-code13", email = "v79260574744@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "django==6.1.1",
+    "djangorestframework==3.18.0",
+    "djangorestframework-simplejwt==5.5.1",
+    "drf-spectacular==0.30.0",
+    "django-filter==26.1",
+    "psycopg[binary]==3.3.5",
+    "python-dotenv==1.2.3",
+    "pillow==12.3.0",
+    "whitenoise==6.12.0",
+    "gunicorn==23.0.0",
+    "redis==6.4.0",
+    "strawberry-graphql (>=0.327.7,<0.328.0)",
+    "strawberry-graphql-django (>=0.89.2,<0.90.0)",
+    "celery (>=5.6.3,<6.0.0)",
+]
+
+# ─── Dev-зависимости ───
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-django==4.14.0",
+    "pytest-cov==7.1.0",
+    "pre-commit==4.0.1",
+    "ruff==0.16.8",
+    "mypy==1.13.0",
+    "django-stubs[compatible-mypy]==6.1.1",
+    "djangorestframework-stubs==3.18.1",
+    "types-pyyaml==6.0.12.20260906",
+    "flower (>=2.2.0,<3.0.0)",
+]
+
+# ─── Ruff ───
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = ["migrations", "__pycache__", ".venv", "node_modules"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "products", "orders", "reviews", "users", "payments"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*.py" = ["E402", "F403", "F405"]
+"*/tests.py" = ["E402"]
+"*/tests/*.py" = ["E402"]
+
+# ─── Mypy ───
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations/", ".venv/"]
+# Celery не поставляется с py.typed и не имеет отдельного пакета celery-stubs.
+# Игнорируем импорты из celery — свой код всё равно типизируем сами.
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.development"

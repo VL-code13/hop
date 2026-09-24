@@ -1,22 +1,92 @@
 """
-URL configuration for config project.
+Главная конфигурация маршрутов URL проекта Hop & Barley.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+Реализует требования разделов:
+- 3.1, 3.2 («Веб-каталог и детальная карточка товара»)
+- 3.3, 3.4 («Корзина, чекаут и оформление заказа»)
+- 3.5 («Аутентификация, профили и регистрация»)
+- 3.6 («Административная панель и аналитика»)
+- 3.7 («REST API: каталог, заказы, корзина, отзывы, JWT»)
+- 3.8 («Документация Swagger/OpenAPI через drf-spectacular»)
+- 3.9 («GraphQL: единый аналитический эндпоинт», бонус)
 """
+
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
+from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
+from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
+from config.admin import HopBarleyAdminSite
+from config.graphql.context import HopBarleyGraphQLView  # ← изменён импорт
+from config.graphql.schema import schema
+from orders.api_views_orders import CartAPIView, OrderViewSet
+from products.api_views_products import ProductViewSet
+from reviews.api_views_reviews import ProductReviewsAPIView
+from users.views import RegisterView
+
+# Кастомная панель администратора с аналитикой (раздел 3.6 ТЗ)
+custom_admin_site = HopBarleyAdminSite(name='custom_admin')
+custom_admin_site._registry = admin.site._registry
+
+# Роутер DRF для ресурсов товаров и заказов (раздел 3.7 ТЗ)
+router = DefaultRouter()
+router.register(r'products', ProductViewSet, basename='api-products')
+router.register(r'orders', OrderViewSet, basename='api-orders')
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # 1. Панель администратора
+    path('admin/', custom_admin_site.urls),
+    # 2. Пользователи и аутентификация (веб-интерфейс, раздел 3.5 ТЗ)
+    path('users/', include('users.urls', namespace='users')),
+    # 3. Корзина и оформление заказа (веб-интерфейс, разделы 3.3 и 3.4 ТЗ)
+    path('', include('orders.urls', namespace='orders')),
+    # 4. Пользовательские отзывы (веб-интерфейс, раздел 3.2 ТЗ)
+    path('reviews/', include('reviews.urls', namespace='reviews')),
+    # 5. Каталог товаров и витрина (главная страница, раздел 3.1 ТЗ)
+    path('', include('products.urls', namespace='products')),
+    # 6. Эмуляция платежей (раздел 3.4 ТЗ)
+    path('payments/', include('payments.urls', namespace='payments')),
+    # =========================================================================
+    # 7. REST API эндпоинты (раздел 3.7 ТЗ)
+    # =========================================================================
+    path('api/', include(router.urls)),
+    path('api/cart/', CartAPIView.as_view(), name='api-cart'),
+    path('api/products/<int:product_id>/reviews/', ProductReviewsAPIView.as_view(), name='api-product-reviews'),
+    path('api/users/register/', RegisterView.as_view(), name='api-user-register'),
+    path('api/users/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # =========================================================================
+    # 8. Документация OpenAPI / Swagger (раздел 3.8 ТЗ)
+    # =========================================================================
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    # =========================================================================
+    # 9. GraphQL — единый эндпоинт (раздел 3.9 ТЗ, бонус)
+    # =========================================================================
+    # csrf_exempt: GraphQL-клиенты передают JWT в заголовке Authorization,
+    #   а не в форме — CSRF-токен для них не нужен и только мешает.
+    # context задаётся через HopBarleyGraphQLView.get_context() —
+    #   параметр context_getter в Django-интеграции Strawberry не поддерживается.
+    path(
+        'graphql/',
+        csrf_exempt(HopBarleyGraphQLView.as_view(schema=schema)),
+        name='graphql',
+    ),
 ]
+
+# Раздача медиафайлов при локальной разработке
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -1,201 +1,82 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin - Product Stock | Hop & Barley</title>
+{% extends 'base.html' %}
+{% load static %}
 
-  <!-- Google Fonts & Font Awesome -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+{% block title %}Управление остатками | Hop &amp; Barley{% endblock %}
 
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="../../static/css/main.css">
-</head>
-<body>
-<!-- Header -->
-<header>
-  <div class="header-container">
-    <a href="../home.html" class="header__logo">
-      <img src="../../static/img/logo.svg" alt="Hop & Barley Logo">
-      <p class="logo-text">Hop & Barley</p>
-    </a>
-    <nav class="header__nav">
-      <ul>
-        <li><a href="../home.html">Products</a></li>
-        <li><a href="guides-recipes.html">Guides & Recipes</a></li>
-        <li><a href="#">Community</a></li>
-        <li><a href="#">Resources</a></li>
-        <li><a href="#">Contact</a></li>
-      </ul>
-    </nav>
-    <div class="header__user-actions">
-      <a href="../account.html" class="user-icon" aria-label="My Account">
-        <img src="../../static/img/icons/User_alt.svg" alt="User Account">
+{% block content %}
+<main class="admin-page-wrapper" style="padding: 40px 15px;">
+  <div class="container">
+    <div class="admin-tabs" style="display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 1px solid #3d3228; padding-bottom: 12px;">
+      <a href="{% url 'custom_admin:index' %}" class="button button--secondary" style="text-decoration: none;">
+        <i class="fa-solid fa-chart-line"></i> Дашборд
       </a>
-      <a href="../cart.html" class="cart-icon" aria-label="Shopping Cart">
-        <img src="../../static/img/icons/Shopping_bag.svg" alt="Shopping Cart">
+      <a href="{% url 'custom_admin:products_product_changelist' %}" class="button button--primary" style="text-decoration: none;">
+        <i class="fa-solid fa-boxes-stacked"></i> Управление каталогом
       </a>
-
-    </div>
-  </div>
-</header>
-
-<!-- Main Content -->
-<main class="admin-page-wrapper">
-  <div class="admin-container">
-    <!-- Tabs Navigation -->
-    <div class="admin-tabs">
-      <a href="products.html" class="admin-tab active">Product Management</a>
-      <a href="dashboard.html" class="admin-tab">Dashboard</a>
+      <a href="{% url 'custom_admin:products_product_add' %}" class="button button--secondary" style="text-decoration: none;">
+        <i class="fa-solid fa-plus"></i> Добавить товар
+      </a>
     </div>
 
-    <!-- Content Area -->
-    <div class="admin-content">
-      <h1 class="admin-content__title">Admin - Product Stock</h1>
-      <div class="admin-actions">
-        <a href="add.html" class="button button--primary">
-          <i class="fa-solid fa-plus"></i>
-          <span>Add Product</span>
+    <div class="admin-content" style="background: #241c16; border: 1px solid #3d3228; border-radius: 8px; padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1 style="color: #f5f0eb; font-size: 22px; font-weight: 700; margin: 0;">Складской учёт товаров</h1>
+        <a href="{% url 'custom_admin:products_product_add' %}" class="button button--primary" style="text-decoration: none;">
+          <i class="fa-solid fa-plus"></i> Добавить товар
         </a>
       </div>
 
-      <div class="admin-table-wrapper">
-        <table class="admin-table">
+      <div class="admin-table-wrapper" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; color: #f5f0eb; font-size: 13px;">
           <thead>
-          <tr>
-            <th>id</th>
-            <th>name</th>
-            <th>description</th>
-            <th>price</th>
-            <th>category</th>
-            <th>created_at</th>
-            <th>updated_at</th>
-            <th></th>
-          </tr>
+            <tr style="border-bottom: 1px solid #3d3228; text-align: left; color: #a89f91;">
+              <th style="padding: 10px;">ID</th>
+              <th style="padding: 10px;">Название</th>
+              <th style="padding: 10px;">Категория</th>
+              <th style="padding: 10px;">Цена</th>
+              <th style="padding: 10px;">Остаток</th>
+              <th style="padding: 10px;">Статус</th>
+              <th style="padding: 10px;">Действие</th>
+            </tr>
           </thead>
           <tbody>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$100.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$90.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$140.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$120.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
-          <tr>
-            <td>122033</td>
-            <td>name</td>
-            <td>description</td>
-            <td>$20.00</td>
-            <td>category</td>
-            <td>YYYY-MM-DD</td>
-            <td>YYYY-MM-DD</td>
-            <td><a href="add.html" class="button button--edit">Edit</a></td>
-          </tr>
+            {% for product in products %}
+            <tr style="border-bottom: 1px solid #2e241c;">
+              <td style="padding: 10px;">#{{ product.id }}</td>
+              <td style="padding: 10px; font-weight: 600;">{{ product.name }}</td>
+              <td style="padding: 10px; color: #d6cebf;">{{ product.category.name }}</td>
+              <td style="padding: 10px; color: #e8a84c; font-weight: 600;">{{ product.price }} ₽</td>
+              <td style="padding: 10px;">
+                {% if product.stock > 0 %}
+                  <span style="color: #75d98d;">{{ product.stock }} шт.</span>
+                {% else %}
+                  <span style="color: #ff8b8b; font-weight: bold;">0 шт.</span>
+                {% endif %}
+              </td>
+              <td style="padding: 10px;">
+                {% if product.is_active %}
+                  <span style="color: #75d98d; font-size: 11px; background: #1e3a24; padding: 2px 6px; border-radius: 4px;">Активен</span>
+                {% else %}
+                  <span style="color: #ff8b8b; font-size: 11px; background: #3b1818; padding: 2px 6px; border-radius: 4px;">Скрыт</span>
+                {% endif %}
+              </td>
+              <td style="padding: 10px;">
+                <a href="{% url 'custom_admin:products_product_change' product.id %}" class="button button--secondary" style="padding: 4px 10px; font-size: 12px; text-decoration: none;">
+                  Изменить
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" style="padding: 20px; text-align: center; color: #a89f91;">
+                Товары не найдены.
+              </td>
+            </tr>
+            {% endfor %}
           </tbody>
         </table>
-      </div>
-
-      <!-- Pagination -->
-      <div class="account-pagination">
-        <a href="#" class="pagination-link-account disabled">← Previous</a>
-        <a href="#" class="pagination-link-account">Next →</a>
       </div>
     </div>
   </div>
 </main>
-
-<!-- Footer -->
-<!--<footer>-->
-<!--  <p class="footer__copyright">© Hop & Barley 2025. All rights reserved</p>-->
-<!--</footer>-->
-
-<!-- JS -->
-<script src="../../static/js/main.js"></script>
-</body>
-</html>
+{% endblock %}

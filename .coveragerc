@@ -1,0 +1,27 @@
+[run]
+omit =
+    */migrations/*
+    */graphql/types.py
+    */graphql/__init__.py
+    */tests/*
+    */tests.py
+    */apps.py
+    */wsgi.py
+    */asgi.py
+    manage.py
+    config/settings/*
+    conftest.py
+    */urls.py
+    */admin.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    class .*\bMeta\b:
+
+[html]
+directory = htmlcov
+title = Hop & Barley Coverage

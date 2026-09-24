@@ -1,0 +1,260 @@
+[
+  {
+    "model": "products.category",
+    "pk": 1,
+    "fields": {
+      "name": "Хмель",
+      "slug": "hops",
+      "parent": null,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.category",
+    "pk": 2,
+    "fields": {
+      "name": "Солод",
+      "slug": "malts",
+      "parent": null,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.category",
+    "pk": 3,
+    "fields": {
+      "name": "Дрожжи",
+      "slug": "yeast",
+      "parent": null,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.category",
+    "pk": 4,
+    "fields": {
+      "name": "Оборудование",
+      "slug": "equipment",
+      "parent": null,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.category",
+    "pk": 5,
+    "fields": {
+      "name": "Ароматический хмель",
+      "slug": "aroma-hops",
+      "parent": 1,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.category",
+    "pk": 6,
+    "fields": {
+      "name": "Горький хмель",
+      "slug": "bittering-hops",
+      "parent": 1,
+      "created_at": "2025-01-10T10:00:00Z",
+      "updated_at": "2025-01-10T10:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 1,
+    "fields": {
+      "name": "Хмель Citra (100г)",
+      "slug": "citra-hops-100g",
+      "description": "Популярный американский сорт хмеля. Отличается ярким ароматическим профилем с нотами цитрусовых, грейпфрута, лайма и тропических фруктов.",
+      "price": "550.00",
+      "category": 5,
+      "image": "",
+      "is_active": true,
+      "stock": 25,
+      "created_at": "2025-01-11T12:00:00Z",
+      "updated_at": "2025-01-11T12:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 2,
+    "fields": {
+      "name": "Хмель Mosaic (100г)",
+      "slug": "mosaic-hops-100g",
+      "description": "Комплексный хмель с богатой палитрой: манго, черника, хвоя и легкие цитрусовые оттенки. Идеален для NEIPA и American Pale Ale.",
+      "price": "590.00",
+      "category": 5,
+      "image": "",
+      "is_active": true,
+      "stock": 18,
+      "created_at": "2025-01-11T12:10:00Z",
+      "updated_at": "2025-01-11T12:10:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 3,
+    "fields": {
+      "name": "Хмель Magnum (100г)",
+      "slug": "magnum-hops-100g",
+      "description": "Классический горький хмель с высоким содержанием альфа-кислот. Дает чистую, благородную и ненавязчивую горечь в лагерах и стаутах.",
+      "price": "420.00",
+      "category": 6,
+      "image": "",
+      "is_active": true,
+      "stock": 40,
+      "created_at": "2025-01-11T12:20:00Z",
+      "updated_at": "2025-01-11T12:20:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 4,
+    "fields": {
+      "name": "Хмель Saaz (Жатецкий, 100г)",
+      "slug": "saaz-hops-100g",
+      "description": "Традиционный чешский тонко-ароматический хмель. Неотъемлемая основа настоящих богемских пилснеров с пряным травянистым букетом.",
+      "price": "480.00",
+      "category": 5,
+      "image": "",
+      "is_active": true,
+      "stock": 12,
+      "created_at": "2025-01-11T12:30:00Z",
+      "updated_at": "2025-01-11T12:30:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 5,
+    "fields": {
+      "name": "Солод Pilsner Malt (1 кг)",
+      "slug": "pilsner-malt-1kg",
+      "description": "Базовый светлый ячменный солод высшего качества. Подходит для создания легких лагеров, элей и пшеничного пива в качестве основы засыпи.",
+      "price": "210.00",
+      "category": 2,
+      "image": "",
+      "is_active": true,
+      "stock": 150,
+      "created_at": "2025-01-12T09:00:00Z",
+      "updated_at": "2025-01-12T09:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 6,
+    "fields": {
+      "name": "Солод Pale Ale (1 кг)",
+      "slug": "pale-ale-malt-1kg",
+      "description": "Насыщенный базовый солод с мягким зерновым и слегка ореховым вкусом. Основа для классических английских и американских элей.",
+      "price": "230.00",
+      "category": 2,
+      "image": "",
+      "is_active": true,
+      "stock": 90,
+      "created_at": "2025-01-12T09:15:00Z",
+      "updated_at": "2025-01-12T09:15:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 7,
+    "fields": {
+      "name": "Солод Карамельный Caramunich II (1 кг)",
+      "slug": "caramunich-ii-1kg",
+      "description": "Спецсолод для придания пиву медно-янтарного цвета, карамельной сладости и глубокого солодового тела.",
+      "price": "290.00",
+      "category": 2,
+      "image": "",
+      "is_active": true,
+      "stock": 35,
+      "created_at": "2025-01-12T09:30:00Z",
+      "updated_at": "2025-01-12T09:30:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 8,
+    "fields": {
+      "name": "Солод Шоколадный Chocolate Malt (1 кг)",
+      "slug": "chocolate-malt-1kg",
+      "description": "Жженый солод для темных сортов пива: портеров, стаутов и браунов. Придает глубокий цвет и ноты темного шоколада и кофе.",
+      "price": "310.00",
+      "category": 2,
+      "image": "",
+      "is_active": true,
+      "stock": 3,
+      "created_at": "2025-01-12T09:45:00Z",
+      "updated_at": "2025-01-12T09:45:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 9,
+    "fields": {
+      "name": "Дрожжи пивные SafAle US-05 (11.5г)",
+      "slug": "safale-us-05",
+      "description": "Самый популярный американский элевый штамм дрожжей. Образует плотную шапку, обеспечивает чистое брожение и подчеркивает хмель.",
+      "price": "390.00",
+      "category": 3,
+      "image": "",
+      "is_active": true,
+      "stock": 60,
+      "created_at": "2025-01-13T14:00:00Z",
+      "updated_at": "2025-01-13T14:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 10,
+    "fields": {
+      "name": "Дрожжи пивные SafLager W-34/70 (11.5г)",
+      "slug": "saflager-w-34-70",
+      "description": "Легендарный штамм из института Вайенштефан. Позволяет сбраживать безупречные хрустящие европейские лагеры.",
+      "price": "470.00",
+      "category": 3,
+      "image": "",
+      "is_active": true,
+      "stock": 45,
+      "created_at": "2025-01-13T14:15:00Z",
+      "updated_at": "2025-01-13T14:15:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 11,
+    "fields": {
+      "name": "Ареометр АС-3 (0-25%) с цилиндром",
+      "slug": "hydrometer-as-3",
+      "description": "Профессиональный лабораторный прибор для точного замера начальной и конечной плотности сусла и расчета крепости напитка.",
+      "price": "890.00",
+      "category": 4,
+      "image": "",
+      "is_active": true,
+      "stock": 20,
+      "created_at": "2025-01-14T11:00:00Z",
+      "updated_at": "2025-01-14T11:00:00Z"
+    }
+  },
+  {
+    "model": "products.product",
+    "pk": 12,
+    "fields": {
+      "name": "Ферментер конический пластиковый (32л)",
+      "slug": "fermenter-32l",
+      "description": "Емкость для брожения из пищевого полипропилена с гидрозатвором, краном для розлива и градуированной шкалой объема.",
+      "price": "2490.00",
+      "category": 4,
+      "image": "",
+      "is_active": true,
+      "stock": 2,
+      "created_at": "2025-01-14T11:30:00Z",
+      "updated_at": "2025-01-14T11:30:00Z"
+    }
+  }
+]

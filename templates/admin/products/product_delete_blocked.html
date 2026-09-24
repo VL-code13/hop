@@ -1,0 +1,85 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:products_product_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" style="max-width: 720px;">
+    <h1 style="color: #ba2121;">Удаление товара невозможно</h1>
+
+    <p style="font-size: 14px; line-height: 1.6;">
+        Товар <b>«{{ product.name }}»</b> используется в <b>{{ orders_count }}</b>
+        заказ{{ orders_count|pluralize:",ах" }} — всего
+        <b>{{ order_items_count }}</b> позиц{{ order_items_count|pluralize:"ия,ии,ий" }},
+        {{ total_quantity }} шт. суммарно.
+    </p>
+
+    <p style="font-size: 14px; line-height: 1.6;">
+        Удаление сломает финансовую историю: пропадут данные о том, что покупали клиенты,
+        сломаются отчёты и аналитика. Django защищает такие товары через
+        <code>on_delete=PROTECT</code>.
+    </p>
+
+    <div style="background: #f8f8f8; border-left: 4px solid #417690; padding: 12px 16px; margin: 20px 0;">
+        <p style="margin: 0 0 8px; font-weight: 600;">Что делать вместо удаления:</p>
+        <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+            <li>
+                <b>Деактивировать товар</b> — он пропадёт с витрины и из API,
+                но останется в существующих заказах.
+            </li>
+            <li>
+                <b>Удалить позицию из конкретного заказа</b> — откройте заказ,
+                поставьте галочку «Удалить» в строке нужной позиции, нажмите «Сохранить».
+                Остаток товара автоматически вернётся на склад.
+            </li>
+        </ul>
+    </div>
+
+    {% if order_items %}
+    <p style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Где используется товар:</p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+        <thead>
+            <tr style="background: #f8f8f8; text-align: left;">
+                <th style="padding: 6px 8px; border: 1px solid #ddd;">Заказ</th>
+                <th style="padding: 6px 8px; border: 1px solid #ddd;">Покупатель</th>
+                <th style="padding: 6px 8px; border: 1px solid #ddd;">Статус</th>
+                <th style="padding: 6px 8px; border: 1px solid #ddd;">Кол-во</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order_items %}
+            <tr>
+                <td style="padding: 6px 8px; border: 1px solid #ddd;">
+                    <a href="{% url 'admin:orders_order_change' item.order_id %}">#{{ item.order_id }}</a>
+                </td>
+                <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ item.order.user.username }}</td>
+                <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ item.order.get_status_display }}</td>
+                <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ item.quantity }} шт.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="submit" name="action" value="deactivate"
+                    style="background: #417690; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                Деактивировать товар (убрать с витрины)
+            </button>
+            <button type="submit" name="action" value="cancel"
+                    style="background: #f8f8f8; color: #333; border: 1px solid #ccc; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                Нет, вернуться назад
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

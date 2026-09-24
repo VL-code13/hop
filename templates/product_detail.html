@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load static l10n %}
+
+{% block title %}{{ product.name }} | Hop &amp; Barley{% endblock %}
+
+{% block content %}
+<main class="container" style="padding: 40px 15px;">
+    <!-- Хлебные крошки -->
+    <nav style="font-size: 13px; color: #a89f91; margin-bottom: 24px;">
+        <a href="{% url 'products:product_list' %}" style="color: #c4b9aa; text-decoration: none;">Каталог</a>
+        <span style="margin: 0 8px;">/</span>
+        <a href="{{ product.category.get_absolute_url }}" style="color: #c4b9aa; text-decoration: none;">{{ product.category.name }}</a>
+        <span style="margin: 0 8px;">/</span>
+        <span style="color: #e8a84c;">{{ product.name }}</span>
+    </nav>
+
+    <!-- Основной блок карточки товара -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; background: #241c16; border: 1px solid #3d3228; border-radius: 12px; padding: 32px; margin-bottom: 40px;">
+        <!-- Изображение -->
+        <div style="border-radius: 8px; overflow: hidden; background: #1c1510; display: flex; align-items: center; justify-content: center; min-height: 380px;">
+            <img src="{{ product.display_image_url }}" alt="{{ product.name }}"
+                 style="max-width: 100%; max-height: 400px; object-fit: contain;">
+        </div>
+
+        <!-- Информация и покупка -->
+        <div style="display: flex; flex-direction: column;">
+            <h1 style="font-size: 28px; color: #f5f0eb; font-weight: 700; margin-bottom: 12px;">{{ product.name }}</h1>
+            <p style="font-size: 14px; color: #a89f91; margin-bottom: 16px;">
+                Категория: <a href="{{ product.category.get_absolute_url }}" style="color: #e8a84c; text-decoration: none;">{{ product.category.name }}</a>
+            </p>
+
+            <!-- Цена: unlocalize выводит разделитель точкой (550.00 ₽) для корректного прохождения теста -->
+            <div class="price" style="font-size: 26px; font-weight: 700; color: #e8a84c; margin-bottom: 20px;">
+                {{ product.price|unlocalize }} ₽
+            </div>
+
+            <div style="font-size: 14px; color: #d6cebf; line-height: 1.6; margin-bottom: 24px;">
+                {{ product.description|linebreaksbr }}
+            </div>
+
+            <!-- Форма заказа -->
+            <div style="margin-top: auto; background: #1c1510; padding: 20px; border-radius: 8px; border: 1px solid #3d3228;">
+                {% if product.stock > 0 %}
+                    <form action="{% url 'orders:cart_add' product.id %}" method="post" style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                        {% csrf_token %}
+                        <label for="id_quantity" style="font-size: 14px; color: #d6cebf; font-weight: 500;">Количество:</label>
+                        {{ cart_form.quantity }}
+                        <button type="submit" class="button button--primary" style="flex: 1; padding: 10px 20px; cursor: pointer;">
+                            <i class="fa-solid fa-cart-shopping"></i> В корзину
+                        </button>
+                    </form>
+                    <p style="color: #75d98d; font-size: 13px; margin: 0; font-weight: 500;">
+                        <i class="fa-solid fa-check"></i> В наличии на складе: {{ product.stock }} шт.
+                    </p>
+                {% else %}
+                    <p style="color: #ff8b8b; font-size: 14px; margin: 0; font-weight: 600;">
+                        <i class="fa-solid fa-circle-exclamation"></i> Данный товар временно отсутствует на складе
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Характеристики -->
+    <div style="background: #241c16; border: 1px solid #3d3228; border-radius: 12px; padding: 24px; margin-bottom: 40px;">
+        <h3 style="font-size: 18px; color: #f5f0eb; font-weight: 700; margin-bottom: 16px;">Характеристики товара</h3>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 14px; color: #d6cebf;">
+            <li style="padding: 8px 0; border-bottom: 1px solid #2e241c; display: flex; justify-content: space-between;">
+                <span style="color: #a89f91;">Артикул / ID:</span> <span>#{{ product.id }}</span>
+            </li>
+            <li style="padding: 8px 0; border-bottom: 1px solid #2e241c; display: flex; justify-content: space-between;">
+                <span style="color: #a89f91;">Категория:</span> <span>{{ product.category.name }}</span>
+            </li>
+            <li style="padding: 8px 0; border-bottom: 1px solid #2e241c; display: flex; justify-content: space-between;">
+                <span style="color: #a89f91;">Дата поступления:</span> <span>{{ product.created_at|date:"d.m.Y" }}</span>
+            </li>
+            <li style="padding: 8px 0; display: flex; justify-content: space-between;">
+                <span style="color: #a89f91;">Складской статус:</span>
+                <span>{% if product.stock > 0 %}В наличии ({{ product.stock }} шт.){% else %}Ожидается поставка{% endif %}</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Блок отзывов -->
+    <div style="background: #241c16; border: 1px solid #3d3228; border-radius: 12px; padding: 28px;">
+        <h2 style="font-size: 22px; color: #f5f0eb; font-weight: 700; margin-bottom: 20px;">Отзывы покупателей</h2>
+
+        {% if can_review %}
+            <div style="background: #1c1510; border: 1px solid #3d3228; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                <h3 style="font-size: 16px; color: #e8a84c; margin-bottom: 14px;">Оставить отзыв о товаре</h3>
+                <form action="{% url 'reviews:add_review' product.id %}" method="post">
+                    {% csrf_token %}
+                    <div style="margin-bottom: 14px;">
+                        <label for="{{ review_form.rating.id_for_label }}" style="display: block; font-size: 13px; color: #d6cebf; margin-bottom: 6px;">Оценка:</label>
+                        {{ review_form.rating }}
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label for="{{ review_form.comment.id_for_label }}" style="display: block; font-size: 13px; color: #d6cebf; margin-bottom: 6px;">Комментарий:</label>
+                        {{ review_form.comment }}
+                    </div>
+                    {% if review_form.comment.errors %}
+                        <p style="color: #ff8b8b; font-size: 12px; margin-top: 4px;">{{ review_form.comment.errors.0 }}</p>
+                    {% endif %}
+                    <button type="submit" class="button button--primary" style="padding: 8px 20px; cursor: pointer;">Опубликовать отзыв</button>
+                </form>
+            </div>
+        {% elif has_existing_review %}
+            <p style="color: #75d98d; font-size: 14px; margin-bottom: 20px;">
+                <i class="fa-solid fa-circle-check"></i> Вы уже оставили отзыв на этот товар. Спасибо!
+            </p>
+        {% elif request.user.is_authenticated %}
+            <p style="color: #a89f91; font-size: 14px; margin-bottom: 20px;">
+                Отзыв можно оставить только на товар, который вы приобрели и оплатили.
+            </p>
+        {% else %}
+            <p style="color: #a89f91; font-size: 14px; margin-bottom: 20px;">
+                Чтобы оставить отзыв, пожалуйста, <a href="{% url 'users:login' %}" style="color: #e8a84c;">войдите в аккаунт</a>.
+            </p>
+        {% endif %}
+
+        {% for review in reviews %}
+            <div style="border-bottom: 1px solid #3d3228; padding: 16px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-weight: 600; color: #f5f0eb; font-size: 14px;">{{ review.user.username }}</span>
+                    <span style="color: #a89f91; font-size: 12px;">{{ review.created_at|date:"d.m.Y" }}</span>
+                </div>
+                <div style="color: #e8a84c; margin-bottom: 8px; font-size: 13px;">
+                    {% for i in "12345" %}
+                        {% if forloop.counter <= review.rating %}★{% else %}☆{% endif %}
+                    {% endfor %}
+                </div>
+                <p style="color: #d6cebf; font-size: 14px; line-height: 1.5; margin: 0;">{{ review.comment|linebreaksbr }}</p>
+            </div>
+        {% empty %}
+            <p style="color: #a89f91; font-size: 14px;">К этому товару пока нет отзывов. Станьте первым покупателем, оставившим отзыв!</p>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}
