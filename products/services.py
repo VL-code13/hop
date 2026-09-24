@@ -79,7 +79,11 @@ def get_catalog_queryset(
     )
 
     if category_slug:
-        queryset = queryset.filter(category__slug=category_slug)
+        # Включаем товары из самой категории И всех её дочерних.
+        # Пример: клик по «Хмель» (slug='hops') должен показать товары
+        # из «Ароматический хмель» (aroma-hops) и «Горький хмель» (bittering-hops).
+        # Q-объект с OR: (category__slug = 'hops') OR (category__parent__slug = 'hops').
+        queryset = queryset.filter(Q(category__slug=category_slug) | Q(category__parent__slug=category_slug))
 
     if search_query:
         queryset = queryset.filter(Q(name__icontains=search_query) | Q(description__icontains=search_query))
