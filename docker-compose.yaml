@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16
     container_name: hop_and_barley_db
-    restart: unless-stopped              # ← было: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hopbarley}
       POSTGRES_USER: ${POSTGRES_USER:-user}
@@ -17,13 +17,27 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: hop_and_barley_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   web:
     build: .
     container_name: hop_and_barley_web
     restart: unless-stopped
-    # Для DEV — runserver (авто-перезагрузка при изменении кода).
+    # Для DEV — runserver с авто-перезагрузкой.
     command: python manage.py runserver 0.0.0.0:8000
-    # Для PROD раскомментируй строку ниже и закомментируй runserver:
+    # Для PROD:
     # command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
     volumes:
       - .:/app
@@ -34,11 +48,15 @@ services:
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
       # Явно переопределяем: контейнер работает на PostgreSQL, не на SQLite.
       - DJANGO_SETTINGS_MODULE=config.settings.prod
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   pg_data:
+  redis_data:
