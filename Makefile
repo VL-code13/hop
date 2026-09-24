@@ -43,8 +43,8 @@ worker:  ## Запустить Celery worker (фоновые задачи)
 beat:  ## Запустить Celery beat (если появится расписание)
 	poetry run celery -A config beat -l info
 
-flower:  ## Запустить Flower — веб-UI для мониторинга Celery (по требованию)
-	poetry run celery -A config flower
+flower:  ## Flower — веб-UI для мониторинга Celery (http://localhost:5555)
+	poetry run celery -A config flower --port=5555 --basic_auth=admin:admin
 
 shell:  ## Открыть Django shell
 	poetry run python manage.py shell

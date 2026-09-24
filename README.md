@@ -14,6 +14,7 @@
 - **GraphQL-эндпоинт** `/graphql/` на Strawberry — единая точка для аналитических запросов по заказам, товарам и пользователям;
 - **кеширование аналитических метрик** через Redis — общий кеш для всех воркеров gunicorn, per-resolver TTL;
 - **фоновые задачи через Celery** — email-уведомления не блокируют чекаут, retry при сбое SMTP;
+- **мониторинг Celery через Flower** — веб-UI для задач, очередей, retry;
 - **pre-commit hooks** для автоматического `ruff`, `ruff-format`, `mypy` и `pytest` перед коммитом и push;
 - **Makefile** со шорткатами для типовых команд (`make ci`, `make test`, `make run`, `make worker`);
 - **управление зависимостями через Poetry** — lock-файл, разделение main/dev-групп, изоляция окружения.
@@ -31,6 +32,7 @@
 - [Примеры запросов с JWT](#примеры-запросов-с-jwt)
 - [GraphQL API](#graphql-api)
 - [Аутентификация и безопасность](#аутентификация-и-безопасность)
+- [Мониторинг Celery (Flower)](#мониторинг-celery-flower)
 - [OpenAPI и интерактивная документация](#openapi-и-интерактивная-документация)
 - [Тестирование и контроль качества](#тестирование-и-контроль-качества)
 - [CI/CD](#cicd)
@@ -53,6 +55,7 @@
 | JWT-авторизация | djangorestframework-simplejwt 5.5.1 | Выпуск, проверка и ротация Access / Refresh токенов |
 | Кеш | Redis 7 + `django.core.cache.RedisCache` | Кеширование аналитических метрик GraphQL |
 | **Фоновые задачи** | **Celery 5.6 + Redis broker** | **Email-уведомления, retry, отложенные операции** |
+| **Мониторинг задач** | **Flower 2.x (dev)** | **Веб-UI для Celery: очереди, retry, ошибки** |
 | Схема OpenAPI | drf-spectacular 0.30.0 | Генерация OpenAPI 3.0, интерактивных Swagger UI и ReDoc |
 | Статические файлы | WhiteNoise 6.12 | Раздача сжатой кэшируемой статики с манифестным хешированием |
 | СУБД (Production) | PostgreSQL 16 + psycopg 3.3 | Продакшн-база с поддержкой строгой изоляции транзакций |
@@ -260,6 +263,13 @@ poetry run celery -A config worker -l info
 
 > **Важно:** без воркера email-уведомления не отправятся — задачи будут копиться в Redis. Для локальной разработки без воркера можно поднять `CELERY_TASK_ALWAYS_EAGER=True` в `.env`, но лучше — запустить воркер.
 
+**8. Опционально — мониторинг Celery через Flower:**
+
+```bash
+make flower
+# → http://localhost:5555 (admin:admin)
+```
+
 **Точки входа:**
 
 | Сервис | URL / где смотреть |
@@ -271,6 +281,7 @@ poetry run celery -A config worker -l info
 | ReDoc | http://127.0.0.1:8000/api/redoc/ |
 | **GraphiQL (GraphQL IDE)** | **http://127.0.0.1:8000/graphql/** |
 | **Celery worker** | **Логи в терминале (`make worker`)** |
+| **Flower (мониторинг Celery)** | **http://localhost:5555 (`make flower`)** |
 
 ### Вариант B: Docker Compose
 
@@ -312,6 +323,7 @@ docker compose exec web poetry run python manage.py collectstatic --noinput
 make install         # установить зависимости и pre-commit hooks
 make run             # запустить dev-сервер
 make worker          # запустить Celery worker
+make flower          # Flower — веб-UI для мониторинга Celery
 make test            # быстрые тесты на SQLite
 make test-graphql    # только тесты GraphQL
 make test-orders     # только тесты заказов (включая email)
@@ -342,6 +354,7 @@ make flush-cache     # очистить кеш
 | `REDIS_URL` | Для prod | `redis://localhost:6379/0` | Backend кеша аналитики. Без него — fallback на LocMemCache (не для прода) |
 | `CELERY_BROKER_URL` | Нет | `redis://localhost:6379/1` | Брокер Celery. Отдельная БД Redis от кеша, чтобы `cache.clear()` не уничтожал очередь. |
 | `CELERY_RESULT_BACKEND` | Нет | `redis://localhost:6379/2` | Хранилище результатов задач Celery. |
+| `FLOWER_PASSWORD` | Нет | `changeme` (dev) | Пароль для basic auth Flower. **Не разворачивать в проде без HTTPS и надёжного пароля.** |
 | `EMAIL_BACKEND` | Нет | `console` | Backend отправки писем. В CI — `locmem`. |
 | `DEFAULT_FROM_EMAIL` | Нет | `Hop & Barley <noreply@hopandbarley.com>` | Адрес отправителя. |
 
@@ -734,6 +747,58 @@ redis-cli KEYS "hopbarley:*"   # посмотреть ключи кеша
 
 ---
 
+## Мониторинг Celery (Flower)
+
+**Flower** — веб-UI для мониторинга фоновых задач Celery. Работает как отдельный процесс, подключается к тому же брокеру Redis (`/1`).
+
+### Возможности
+
+- **Очереди задач** в реальном времени: сколько в pending, active, completed.
+- **История задач**: аргументы, время выполнения, результат, traceback при ошибке.
+- **Retry и ошибки**: какие задачи упали, сколько раз ретраились, почему.
+- **Воркеры**: активность, число обработанных задач, загрузка.
+- **Ручное управление**: retry упавших задач, terminate зависших.
+
+### Запуск
+
+```bash
+make flower          # → http://localhost:5555
+```
+
+Basic auth: `admin` / `admin` (или значение `FLOWER_PASSWORD` из `.env`).
+
+Требует **запущенного Celery worker** (`make worker`) — иначе покажет пустой список.
+
+### Полезные сценарии
+
+**Проверить, что письмо ушло:**
+
+1. Оформи заказ в браузере.
+2. Открой Flower → увидишь задачу `orders.tasks.send_order_confirmation` со статусом `SUCCESS`.
+3. Кликни на неё → секция **«Arguments»** покажет `args: [42]` (order_id).
+
+**Найти упавшие задачи:**
+
+В строке поиска: `state:FAILURE` — увидишь все неудачные попытки с traceback.
+
+**Ретрай упавшей задачи вручную:**
+
+Из detail-view задачи → кнопка **«Retry»** — перезапустит с теми же аргументами.
+
+### Безопасность
+
+- **Не разворачивать Flower в проде без basic auth и HTTPS.** Даёт полный доступ к аргументам и результатам задач — там могут быть email, ID заказов, суммы.
+- **Не открывать порт 5555 во внешнюю сеть.** Только `localhost`.
+- **Пароль** — задавай через `FLOWER_PASSWORD` в `.env`, не оставляй дефолтный `admin:admin` надолго.
+
+### Что НЕ входит в Flower
+
+- **Метрики в Grafana** — это Prometheus + экспортёр, отдельная история.
+- **Уведомления при падениях** — за это отвечает Sentry (в проекте пока не реализовано).
+- **Автоматические алерты** — Flower показывает, но не уведомляет.
+
+---
+
 ## OpenAPI и интерактивная документация
 
 Схема генерируется `drf-spectacular`:
@@ -744,6 +809,7 @@ redis-cli KEYS "hopbarley:*"   # посмотреть ключи кеша
 | ReDoc | `/api/redoc/` |
 | OpenAPI YAML | `/api/schema/` |
 | **GraphiQL (GraphQL IDE)** | **`/graphql/`** |
+| **Flower (Celery UI)** | **`http://localhost:5555`** |
 
 Проверка схемы на валидность:
 
@@ -816,6 +882,8 @@ CELERY_TASK_EAGER_PROPAGATES = True
 
 Тесты email-уведомлений (`orders/tests.py::OrderEmailNotificationTestCase`) используют `self.captureOnCommitCallbacks(execute=True)` — транзакция в `TestCase` не коммитится, и `transaction.on_commit` без этого не сработал бы.
 
+**Flower в тестах не участвует** — это внешний инструмент разработки. В CI он не запускается.
+
 ### Статический анализ
 
 **Через Makefile:**
@@ -862,7 +930,7 @@ GitHub Actions workflow — [`.github/workflows/ci.yml`](.github/workflows/ci.ym
 9. **Run migrations** на PostgreSQL 16 (service container).
 10. **Pytest** — `poetry run pytest --create-db --migrations --cov-fail-under=70`.
 
-CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow). Celery-задачи в CI выполняются в **eager-режиме** (см. `config/settings/ci.py`) — воркер не поднимается.
+CI использует сервис-контейнер Redis для честной проверки кеша аналитики (см. `services: redis:` в workflow). Celery-задачи в CI выполняются в **eager-режиме** (см. `config/settings/ci.py`) — воркер не поднимается. Flower в CI не запускается.
 
 **Локальная симуляция CI — через Makefile:**
 
@@ -968,8 +1036,8 @@ make help
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
 | `make worker` | Запустить Celery worker |
+| `make flower` | Flower — веб-UI для мониторинга Celery (localhost:5555) |
 | `make beat` | Запустить Celery beat (если появится расписание) |
-| `make flower` | Запустить Flower — веб-UI для мониторинга Celery |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
@@ -1014,6 +1082,12 @@ make run             # запустить сервер
 make worker          # фоновые задачи
 ```
 
+**Терминал 3 (опционально) — Flower:**
+
+```bash
+make flower          # веб-UI для мониторинга задач
+```
+
 **После правок кода:**
 
 ```bash
@@ -1039,7 +1113,7 @@ git add . && git commit -m "..." && git push
 - **Задачи ставятся в очередь только после коммита** транзакции (`transaction.on_commit`) — воркер не увидит «полу-созданный» заказ.
 - **Retry при сбое SMTP**: `send_order_confirmation` — до 3 повторов с интервалом 60 сек, `notify_admins_new_order` — до 2 повторов с интервалом 120 сек.
 - **Нет периодических задач** — Celery Beat не настроен, расписания нет.
-- **Flower не подключён** — мониторинг задач только через логи воркера.
+- **Flower — только для dev.** В проде требует reverse-proxy с HTTPS + basic auth, поэтому не разворачивается вместе с приложением.
 
 ### GraphQL
 
@@ -1061,6 +1135,7 @@ git add . && git commit -m "..." && git push
 - `SECRET_KEY` в Docker Compose берётся из `.env` — для продакшена нужен секрет-менеджер.
 - `BLACKLIST_AFTER_ROTATION = False` — украденный refresh-токен можно использовать параллельно с новым.
 - `SECURE_HSTS_*`, `SECURE_PROXY_SSL_HEADER` не заданы — при деплое за nginx их надо добавить в `prod.py`.
+- **Flower** без basic auth даёт полный доступ к аргументам и результатам задач. Не открывать в интернет.
 
 ### Платежи
 

@@ -81,6 +81,9 @@ make run
 
 # 8. Запустить Celery worker (терминал 2)
 make worker
+
+# 9. Опционально — Flower для мониторинга задач (терминал 3)
+make flower
 ```
 
 ### Установка проекта — вручную
@@ -125,6 +128,9 @@ poetry run python manage.py runserver
 
 # 10. Запустить Celery worker (терминал 2)
 poetry run celery -A config worker -l info
+
+# 11. Опционально — Flower (терминал 3)
+poetry run celery -A config flower --port=5555 --basic_auth=admin:admin
 ```
 
 ### Полезные команды Poetry
@@ -200,6 +206,23 @@ print('Broker:', send_order_confirmation.app.conf.broker_url)
 # Task name: orders.tasks.send_order_confirmation
 # Broker: redis://localhost:6379/1
 ```
+
+### Мониторинг Celery через Flower
+
+Для визуального наблюдения за задачами — **Flower**:
+
+```bash
+# Терминал 1 — Celery worker
+make worker
+
+# Терминал 2 — Flower
+make flower
+# → http://localhost:5555 (admin:admin или FLOWER_PASSWORD из .env)
+```
+
+Показывает: очереди, историю задач, аргументы, traceback, retry-статусы.
+
+**Не разворачивать в проде без basic auth и HTTPS** — даёт полный доступ к аргументам и результатам задач.
 
 ---
 
@@ -496,8 +519,8 @@ make help
 | `make install` | Установить зависимости + pre-commit hooks |
 | `make run` | Запустить dev-сервер |
 | `make worker` | Запустить Celery worker |
+| `make flower` | Flower — веб-UI для мониторинга Celery |
 | `make beat` | Запустить Celery beat (если появится расписание) |
-| `make flower` | Запустить Flower — веб-UI для мониторинга Celery |
 | `make shell` | Открыть Django shell |
 | `make migrate` / `make makemigrations` | Миграции |
 | `make test` | Быстрые тесты на SQLite без coverage |
@@ -534,6 +557,12 @@ make run             # запустить сервер
 
 ```bash
 make worker          # фоновые задачи (email и др.)
+```
+
+**Терминал 3 (опционально) — Flower:**
+
+```bash
+make flower          # веб-UI для мониторинга задач
 ```
 
 **После правок кода:**
@@ -574,6 +603,7 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "pre-commit==4.0.1",
+    "flower",
     ...
 ]
 
@@ -826,6 +856,7 @@ chore(infra): добавить сервис worker в docker-compose
 chore: настроить pre-commit hooks
 chore: добавить Makefile со шорткатами для типовых команд
 chore(ci): обновить pre-commit hooks
+chore: добавить Flower для мониторинга Celery
 ```
 
 ### Примеры плохих коммитов
@@ -865,7 +896,7 @@ make ci
 
 Обновите `README.md`, если меняли:
 - публичное API (REST или GraphQL),
-- переменные окружения (в том числе `REDIS_URL`, `CELERY_*`),
+- переменные окружения (в том числе `REDIS_URL`, `CELERY_*`, `FLOWER_PASSWORD`),
 - структуру проекта,
 - зависимости.
 
@@ -1030,7 +1061,7 @@ Traceback (most recent call last):
 
 ### Чего не делать
 
-- Не публикуйте `SECRET_KEY`, пароли, `POSTGRES_PASSWORD`.
+- Не публикуйте `SECRET_KEY`, пароли, `POSTGRES_PASSWORD`, `FLOWER_PASSWORD`.
 - Не прикладывайте `db.sqlite3`.
 - Не пишите «всё сломалось» без деталей.
 
@@ -1047,6 +1078,7 @@ Traceback (most recent call last):
 - [GNU Make docs](https://www.gnu.org/software/make/manual/) — документация Makefile
 - [Redis docs](https://redis.io/docs/) — документация Redis
 - [Celery docs](https://docs.celeryq.dev/) — документация Celery
+- [Flower docs](https://flower.readthedocs.io/) — документация Flower (мониторинг Celery)
 - [Django cache framework](https://docs.djangoproject.com/en/stable/topics/cache/) — кеширование в Django
 - [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI-пайплайн
 - [Django docs](https://docs.djangoproject.com/)
