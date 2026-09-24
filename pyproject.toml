@@ -31,6 +31,7 @@ dependencies = [
     "redis==6.4.0",
     "strawberry-graphql (>=0.327.7,<0.328.0)",
     "strawberry-graphql-django (>=0.89.2,<0.90.0)",
+    "celery (>=5.6.3,<6.0.0)",
 ]
 
 # ─── Dev-зависимости ───
@@ -73,6 +74,12 @@ indent-style = "space"
 # ─── Mypy ───
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations/", ".venv/"]
+# Celery не поставляется с py.typed и не имеет отдельного пакета celery-stubs.
+# Игнорируем импорты из celery — свой код всё равно типизируем сами.
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings.development"
