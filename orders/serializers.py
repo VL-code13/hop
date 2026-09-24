@@ -11,8 +11,6 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from django.conf import settings
-from django.core.mail import mail_admins, send_mail
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -22,6 +20,7 @@ from products.models import Product
 
 from .cart import Cart
 from .models import Order, OrderItem
+from .tasks import notify_admins_new_order, send_order_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     3. Фиксация цен на момент покупки (price snapshot).
     4. Списание физических остатков товаров со склада.
     5. Очистка сессионной корзины.
-    6. Отправка email-уведомлений покупателю и администраторам (раздел 3.4 ТЗ).
+    6. Постановка email-уведомлений в очередь Celery — выполняется после
+       успешного коммита транзакции через ``transaction.on_commit``.
     """
 
     payment_method = serializers.ChoiceField(
@@ -117,12 +117,18 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict[str, Any]) -> Order:
         """
-        Создает заказ, позиции чека, списывает остатки и отправляет уведомления.
+        Создает заказ, позиции чека, списывает остатки и ставит уведомления в очередь.
 
         Списание остатков выполняется атомарно на уровне БД через
         ``Product.objects.filter(stock__gte=qty).update(stock=F('stock') - qty)``.
         Это исключает overselling даже там, где ``select_for_update()``
         не работает как реальная блокировка (например, на SQLite).
+
+        Email-уведомления НЕ отправляются синхронно — они ставятся в очередь
+        Celery через ``transaction.on_commit``. Это гарантирует:
+        - чекаут не блокируется на SMTP;
+        - воркер видит заказ только после коммита (нет race condition);
+        - при откате транзакции задачи не уйдут вообще.
         """
         cart: Cart = validated_data.pop('cart')
         user = self.context['request'].user
@@ -172,45 +178,20 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 if not updated:
                     raise serializers.ValidationError(f'Остаток товара «{p.name}» изменился. Повторите попытку.')
 
-        # 5. Очищаем корзину после успешной транзакции
+            # 5. Ставим email-уведомления в очередь Celery.
+            #    transaction.on_commit гарантирует, что задачи попадут в брокер
+            #    ТОЛЬКО после успешного коммита транзакции. Иначе воркер может
+            #    получить order.id до коммита и упасть с Order.DoesNotExist.
+            transaction.on_commit(lambda: send_order_confirmation.delay(order.id))
+            transaction.on_commit(lambda: notify_admins_new_order.delay(order.id))
+
+        # 6. Очищаем корзину — ВНЕ транзакции, без on_commit.
+        #    cart.clear() работает с сессией, коммит для него не нужен.
+        #    Если транзакция откатилась — управление ушло в raise выше,
+        #    и эта строка не выполнится.
         cart.clear()
 
-        # 6. Отправляем email-уведомления (раздел 3.4 ТЗ)
-        self._send_order_notifications(order, user)
-
         return order
-
-    def _send_order_notifications(self, order: Order, user: Any) -> None:
-        """
-        Безопасная отправка транзакционных писем покупателю и администраторам.
-
-        Сбой SMTP не должен откатывать уже созданный заказ, но обязан
-        попасть в лог — иначе о проблеме с почтой никто не узнает.
-        """
-        try:
-            send_mail(
-                subject=f'Hop & Barley: Заказ #{order.id} принят в обработку',
-                message=(
-                    f'Здравствуйте, {user.get_full_name() or user.username}!\n\n'
-                    f'Ваш заказ #{order.id} на сумму {order.total_price} ₽ успешно создан.\n'
-                    f'Способ оплаты: {order.get_payment_method_display()}.\n'
-                    f'Адрес доставки: {order.shipping_address}\n\n'
-                    'Спасибо, что выбрали Hop & Barley!'
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-            mail_admins(
-                subject=f'Новый заказ #{order.id} на сумму {order.total_price} ₽',
-                message=f'Пользователь {user.username} оформил заказ #{order.id}.',
-                fail_silently=True,
-            )
-        except Exception:
-            logger.exception(
-                'Не удалось отправить email-уведомления по заказу #%s',
-                order.id,
-            )
 
 
 class OrderCancelSerializer(serializers.Serializer):
