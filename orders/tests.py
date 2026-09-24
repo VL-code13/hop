@@ -7,6 +7,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
@@ -177,3 +178,136 @@ class OrderItemDeleteTestCase(TestCase):
         order.items.get(product=self.product).delete()
         order.refresh_from_db()
         self.assertEqual(order.total_price, Decimal('0.00'))
+
+
+class OrderEmailNotificationTestCase(TestCase):
+    """Тесты email-уведомлений после оформления заказа.
+
+    Особенности:
+
+    1. Тестируем именно содержимое писем (subject, recipient, body) —
+       не только факт отправки.
+    2. Используем ``self.captureOnCommitCallbacks(execute=True)``: транзакция
+       чекаута в ``TestCase`` не коммитится (pytest/Django откатывают её),
+       поэтому ``transaction.on_commit`` не сработал бы сам по себе.
+       Метод ``TestCase`` перехватывает callbacks и выполняет их
+       принудительно, эмулируя коммит.
+    3. ``CELERY_TASK_ALWAYS_EAGER = True`` в config.settings.test означает,
+       что ``.delay()`` внутри callbacks выполнится синхронно — письма
+       попадут в ``mail.outbox`` сразу.
+    """
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='notify@example.com',
+            email='notify@example.com',
+            password='strong_password_123',
+            first_name='Иван',
+            last_name='Пивоваров',
+        )
+        self.category = Category.objects.create(name='Хмель', slug='hops')
+        self.product = Product.objects.create(
+            name='Citra Hops',
+            slug='citra-hops',
+            price=Decimal('500.00'),
+            category=self.category,
+            stock=10,
+            is_active=True,
+        )
+
+    def _checkout(self) -> None:
+        """Хелпер: логин + корзина + POST на чекаут внутри captureOnCommitCallbacks."""
+        self.client.login(username='notify@example.com', password='strong_password_123')
+        self.client.post(
+            reverse('orders:cart_add', kwargs={'product_id': self.product.id}),
+            {'quantity': 2},
+        )
+        checkout_data = {
+            'full_name': 'Иван Пивоваров',
+            'phone': '+7 (999) 111-22-33',
+            'shipping_address': 'Лиговский проспект, д. 50',
+            'payment_method': Order.PaymentMethod.CARD,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse('orders:checkout'), data=checkout_data)
+
+    def test_checkout_sends_email_to_customer(self) -> None:
+        """После чекаута покупателю уходит письмо с номером заказа."""
+        self._checkout()
+
+        order = Order.objects.get(user=self.user)
+        customer_emails = [m for m in mail.outbox if self.user.email in m.to]
+
+        self.assertEqual(len(customer_emails), 1)
+        email = customer_emails[0]
+        self.assertIn(f'Заказ #{order.id}', email.subject)
+        self.assertIn(self.user.get_full_name(), email.body)
+        self.assertIn(str(order.total_price), email.body)
+        self.assertIn(order.shipping_address, email.body)
+
+    def test_checkout_notifies_admins(self) -> None:
+        """После чекаута администраторы получают уведомление о новом заказе."""
+        self._checkout()
+
+        order = Order.objects.get(user=self.user)
+        # mail_admins отправляет на адреса из settings.ADMINS
+        admin_emails = [m for m in mail.outbox if 'admin@hopandbarley.com' in m.to]
+
+        self.assertEqual(len(admin_emails), 1)
+        email = admin_emails[0]
+        self.assertIn(f'Новый заказ #{order.id}', email.subject)
+        self.assertIn(self.user.username, email.body)
+
+    def test_checkout_sends_exactly_two_emails(self) -> None:
+        """Ровно два письма: покупателю + администраторам. Больше — баг."""
+        self._checkout()
+
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_checkout_email_body_contains_price_and_address(self) -> None:
+        """Тело письма содержит итоговую сумму и адрес доставки."""
+        self._checkout()
+
+        order = Order.objects.get(user=self.user)
+        customer_email = next(m for m in mail.outbox if self.user.email in m.to)
+
+        # Цена из order, а не хардкод — тест не привязан к фикстуре.
+        self.assertIn(str(order.total_price), customer_email.body)
+        self.assertIn(order.shipping_address, customer_email.body)
+        self.assertIn('Спасибо, что выбрали Hop & Barley', customer_email.body)
+
+    def test_no_email_when_checkout_validation_fails(self) -> None:
+        """Если чекаут не удался — письма не отправляются.
+
+        Сценарий: Cart.add отклонил quantity > stock → корзина пуста →
+        checkout_view делает redirect на корзину с сообщением об ошибке,
+        до OrderCreateSerializer.create() дело не доходит → on_commit
+        не регистрируется → писем нет.
+
+        Проверяем итоговое состояние: заказ не создан, писем нет.
+        Код ответа не важен — может быть 200 или 302 в зависимости
+        от реализации вьюхи.
+        """
+        self.client.login(username='notify@example.com', password='strong_password_123')
+        # Пытаемся положить больше, чем есть на складе (Cart.add отклонит)
+        self.client.post(
+            reverse('orders:cart_add', kwargs={'product_id': self.product.id}),
+            {'quantity': 50},  # на складе 10
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                reverse('orders:checkout'),
+                data={
+                    'full_name': 'Иван',
+                    'phone': '+7 (999) 111-22-33',
+                    'shipping_address': 'Тест',
+                    'payment_method': Order.PaymentMethod.CARD,
+                },
+            )
+
+        # Проверяем состояние: заказ не создан, письма не отправлены.
+        # Код ответа не проверяем: твой checkout_view при пустой корзине
+        # делает redirect (302) с сообщением, а не рендерит форму с ошибкой.
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
