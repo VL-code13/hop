@@ -308,9 +308,9 @@ docker compose up --build -d
 **3. Примените миграции и соберите статику:**
 
 ```bash
-docker compose exec web poetry run python manage.py migrate
-docker compose exec web poetry run python manage.py createsuperuser
-docker compose exec web poetry run python manage.py collectstatic --noinput
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py collectstatic --noinput
 ```
 
 **Точки входа:** те же, что выше, только порт `8080` вместо `8000` (см. `docker-compose.yaml`).
