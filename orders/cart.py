@@ -69,7 +69,6 @@ class Cart:
         current_quantity: int = self.cart.get(product_id, {}).get('quantity', 0)
 
         # 3. Вычисляем итоговое целевое количество
-        # 3. Вычисляем итоговое целевое количество
         target_quantity = quantity if override_quantity else current_quantity + quantity
 
         # 4. Жесткая валидация верхней границы: не срезаем остаток тихо, а отклоняем операцию.
