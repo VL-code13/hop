@@ -3,14 +3,12 @@ name: CI
 on:
   push:
     branches:
-      - dev_3st_week
-      - feature/poetry-graphql
       - main
+      - fix/mentor-review
   pull_request:
     branches:
-      - dev_3st_week
-      - feature/poetry-graphql
       - main
+      - fix/mentor-review
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
