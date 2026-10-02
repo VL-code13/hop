@@ -11,9 +11,10 @@
 #   make worker      — запустить Celery worker
 
 .DEFAULT_GOAL := help
-.PHONY: help install run worker shell migrate makemigrations test test-all test-graphql \
-        test-products test-orders lint format ci up up-redis up-all down logs logs-worker \
-        redis-cli psql flush-cache check clean
+.PHONY: help install run worker beat flower shell migrate makemigrations test test-all \
+        test-graphql test-products test-orders lint format ci up up-redis up-all \
+        up-docker down logs logs-worker redis-cli psql flush-cache check clean
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Помощь
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,8 +115,17 @@ up:  ## Поднять PostgreSQL (Redis — системный, если уст
 up-redis:  ## Поднять Redis в Docker (если системного нет)
 	docker compose up -d redis
 
-up-all:  ## Поднять весь стек (db + redis + worker + web) в контейнерах
+up-docker:  ## Поднять весь стек в Docker (db + redis + web + worker)
 	docker compose up --build -d
+	@echo ""
+	@echo "Стек поднят. Логи worker'а:"
+	@echo "  docker compose logs -f worker"
+	@echo "Точки входа:"
+	@echo "  http://localhost:8080/          — каталог"
+	@echo "  http://localhost:8080/admin/    — админка"
+	@echo "  http://localhost:8080/graphql/  — GraphiQL"
+
+up-all: up-docker  ## Алиас для up-docker (весь стек в контейнерах)
 
 down:  ## Остановить все контейнеры
 	docker compose down
