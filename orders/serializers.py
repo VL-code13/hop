@@ -41,8 +41,17 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     """
-    Сериализатор для чтения данных о заказе (GET list / GET retrieve).
-    Включает в себя вложенный список купленных позиций и строковый статус.
+    Сериализатор для чтения и точечного обновления заказа.
+
+    Правила обновления (PATCH):
+        Изменять ``shipping_address`` и ``payment_method`` можно ТОЛЬКО
+        для заказов в статусе ``PENDING``. Для остальных статусов PATCH
+        отклоняется с 400 — это защита от подмены адреса/способа оплаты
+        задним числом (см. фидбек ментора, п.4.1).
+
+    Остальные поля (``status``, ``total_price``, ``created_at``)
+    объявлены ``read_only`` и меняются только бизнес-логикой:
+    ``OrderCreateSerializer.create()`` и ``OrderCancelSerializer.cancel()``.
     """
 
     items = OrderItemSerializer(many=True, read_only=True)
@@ -61,6 +70,25 @@ class OrderSerializer(serializers.ModelSerializer):
             'items',
         )
         read_only_fields = ('id', 'user', 'status', 'total_price', 'created_at', 'items')
+
+    def update(self, instance: Order, validated_data: dict[str, Any]) -> Order:
+        """
+        Разрешает PATCH только для заказов в статусе ``PENDING``.
+
+        Проверка выполняется здесь, а не в ``validate()``, потому что
+        ``validate()`` вызывается и при создании (``self.instance is None``),
+        а мы хотим ограничить именно обновление существующего заказа.
+
+        Если статус не PENDING — бросаем ``ValidationError``. DRF
+        перехватит его и вернёт 400 Bad Request с описанием в
+        ``non_field_errors``.
+        """
+        if instance.status != Order.Status.PENDING:
+            raise serializers.ValidationError(
+                'Изменять заказ можно только в статусе «Ожидает оплаты». '
+                f'Текущий статус: «{instance.get_status_display()}».'
+            )
+        return super().update(instance, validated_data)
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
@@ -197,34 +225,74 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 class OrderCancelSerializer(serializers.Serializer):
     """
     Сериализатор отмены заказа.
-    Проверяет статус и возвращает списанные товары на склад в транзакции.
+
+    Гарантирует корректность возврата остатков даже при параллельных
+    запросах на отмену одного и того же заказа (см. фидбек ментора, п.4.2).
+
+    Защита от race condition построена на двух уровнях:
+
+    1. ``validate()`` — быстрая проверка статуса без открытия транзакции.
+       Отсеивает очевидно невалидные случаи (заказ уже отменён/отправлен).
+
+    2. ``cancel()`` — внутри ``transaction.atomic()``:
+       - ``select_for_update()`` блокирует строку заказа в БД. Второй
+         параллельный запрос будет ЖДАТЬ освобождения блокировки.
+       - Повторная проверка статуса под блокировкой. Если первый запрос
+         уже отменил заказ — второй получает ``ValidationError`` и НЕ
+         возвращает остаток повторно.
+
+    Без второго уровня два параллельных запроса могли бы оба пройти
+    ``validate()`` и дважды вернуть остаток на склад.
     """
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Быстрая предварительная проверка статуса (без транзакции)."""
         order: Order = self.context['order']
-        if order.status in [Order.Status.SHIPPED, Order.Status.DELIVERED]:
+        if order.status in (Order.Status.SHIPPED, Order.Status.DELIVERED):
             raise serializers.ValidationError('Нельзя отменить заказ, который уже отправлен или доставлен.')
         if order.status == Order.Status.CANCELLED:
             raise serializers.ValidationError('Заказ уже отменен.')
         return attrs
 
     def cancel(self) -> Order:
-        """Атомарно возвращает остатки на склад и переводит заказ в CANCELLED.
+        """
+        Атомарно возвращает остатки на склад и переводит заказ в CANCELLED.
 
         Возврат выполняется атомарным ``F('stock') + qty`` — это исключает
         lost update, если параллельно тот же товар покупает другой клиент.
+
+        Проверка статуса выполняется ПОД БЛОКИРОВКОЙ (``select_for_update``),
+        а не до неё — это закрывает race condition при двойном вызове.
         """
         order: Order = self.context['order']
+
         with transaction.atomic():
-            for item in order.items.select_related('product'):
+            # Блокируем строку заказа — параллельный cancel() будет ждать.
+            # На PostgreSQL select_for_update() — реальная блокировка строки.
+            # На SQLite — no-op (БД и так сериализует записи), но API сохраняется.
+            locked_order = Order.objects.select_for_update().get(pk=order.pk)
+
+            # Повторная проверка статуса УЖЕ ПОД БЛОКИРОВКОЙ.
+            # Между validate() и этой строкой мог пройти другой запрос.
+            if locked_order.status == Order.Status.CANCELLED:
+                raise serializers.ValidationError('Заказ уже отменен.')
+            if locked_order.status in (Order.Status.SHIPPED, Order.Status.DELIVERED):
+                raise serializers.ValidationError('Нельзя отменить заказ, который уже отправлен или доставлен.')
+
+            # Возвращаем остатки атомарным F('stock') + qty.
+            for item in locked_order.items.select_related('product'):
                 Product.objects.filter(id=item.product_id).update(
                     stock=F('stock') + item.quantity,
                     updated_at=timezone.now(),
                 )
 
-            order.status = Order.Status.CANCELLED
-            order.save(update_fields=['status'])
-        return order
+            # Меняем статус через save() с явным updated_at.
+            # update_fields=['status'] НЕ трогает auto_now=True поле —
+            # поэтому добавляем 'updated_at' руками.
+            locked_order.status = Order.Status.CANCELLED
+            locked_order.save(update_fields=['status', 'updated_at'])
+
+        return locked_order
 
 
 class CartItemSerializer(serializers.Serializer):
