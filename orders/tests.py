@@ -10,6 +10,8 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
+from rest_framework import status as drf_status
+from rest_framework.test import APIClient
 
 from products.models import Category, Product
 
@@ -380,3 +382,222 @@ class OrderEmailNotificationTestCase(TestCase):
         # делает redirect (302) с сообщением, а не рендерит форму с ошибкой.
         self.assertEqual(Order.objects.count(), 0)
         self.assertEqual(len(mail.outbox), 0)
+
+
+# ──────────────────────── REST API: правила изменения и отмены заказа ────────────────────────
+class OrderAPIPatchRulesTestCase(TestCase):
+    """Тесты правила «PATCH только для PENDING» (фидбек ментора, п.4.1)."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='api_patch_user',
+            email='api_patch@example.com',
+            password='strong_password_123',
+        )
+        self.other_user = User.objects.create_user(
+            username='api_other_user',
+            email='api_other@example.com',
+            password='strong_password_123',
+        )
+        self.category = Category.objects.create(name='Солод', slug='malt')
+        self.product = Product.objects.create(
+            name='Pale Ale Malt',
+            slug='pale-ale-malt',
+            price=Decimal('300.00'),
+            category=self.category,
+            stock=20,
+            is_active=True,
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+
+    def _make_order(self, status: str) -> Order:
+        order = Order.objects.create(
+            user=self.user,
+            total_price=Decimal('600.00'),
+            shipping_address='Старый адрес',
+            payment_method=Order.PaymentMethod.CARD,
+            status=status,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            price=Decimal('300.00'),
+            quantity=2,
+        )
+        return order
+
+    def test_patch_pending_order_updates_address_and_payment(self) -> None:
+        """PENDING: PATCH обновляет адрес и способ оплаты — 200."""
+        order = self._make_order(Order.Status.PENDING)
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.patch(
+            url,
+            data={
+                'shipping_address': 'Новый адрес, д. 5',
+                'payment_method': Order.PaymentMethod.WALLET,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, drf_status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_address, 'Новый адрес, д. 5')
+        self.assertEqual(order.payment_method, Order.PaymentMethod.WALLET)
+
+    def test_patch_shipped_order_returns_400(self) -> None:
+        """SHIPPED: PATCH отклоняется с 400 — адрес подменить нельзя."""
+        order = self._make_order(Order.Status.SHIPPED)
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.patch(
+            url,
+            data={'shipping_address': 'Другой адрес'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, drf_status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.shipping_address, 'Старый адрес')
+
+    def test_patch_delivered_order_returns_400(self) -> None:
+        """DELIVERED: PATCH отклоняется с 400 — оплату задним числом не сменить."""
+        order = self._make_order(Order.Status.DELIVERED)
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.patch(
+            url,
+            data={'payment_method': Order.PaymentMethod.CASH},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, drf_status.HTTP_400_BAD_REQUEST)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_method, Order.PaymentMethod.CARD)
+
+    def test_patch_cancelled_order_returns_400(self) -> None:
+        """CANCELLED: PATCH отклоняется — отменённый заказ менять нельзя."""
+        order = self._make_order(Order.Status.CANCELLED)
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.patch(
+            url,
+            data={'shipping_address': 'Поздний адрес'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, drf_status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_other_user_order_returns_404(self) -> None:
+        """Чужой заказ недоступен — 404 (queryset фильтрует по user)."""
+        order = self._make_order(Order.Status.PENDING)
+        self.api.force_authenticate(user=self.other_user)
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.patch(
+            url,
+            data={'shipping_address': 'Чужой адрес'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, drf_status.HTTP_404_NOT_FOUND)
+
+
+class OrderAPICancelRaceConditionTestCase(TestCase):
+    """Тесты защиты от двойного возврата остатка при отмене (фидбек ментора, п.4.2)."""
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username='api_cancel_user',
+            email='api_cancel@example.com',
+            password='strong_password_123',
+        )
+        self.category = Category.objects.create(name='Дрожжи', slug='yeast')
+        self.product = Product.objects.create(
+            name='Safale US-05',
+            slug='safale-us-05',
+            price=Decimal('400.00'),
+            category=self.category,
+            stock=10,
+            is_active=True,
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+
+    def _make_pending_order(self) -> Order:
+        """Создаёт PENDING-заказ: 3 шт. товара. Остаток товара — 7 (10 − 3)."""
+        self.product.stock = 7
+        self.product.save(update_fields=['stock'])
+
+        order = Order.objects.create(
+            user=self.user,
+            total_price=Decimal('1200.00'),
+            shipping_address='Тестовый адрес',
+            status=Order.Status.PENDING,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            price=Decimal('400.00'),
+            quantity=3,
+        )
+        return order
+
+    def test_cancel_returns_stock_and_sets_status(self) -> None:
+        """Отмена: 3 шт. возвращаются на склад, статус → CANCELLED."""
+        order = self._make_pending_order()
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.delete(url)
+
+        self.assertEqual(response.status_code, drf_status.HTTP_204_NO_CONTENT)
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+        self.assertEqual(self.product.stock, 10)  # 7 + 3
+
+    def test_double_cancel_returns_400_and_does_not_return_stock_twice(self) -> None:
+        """Двойная отмена: второй запрос отклоняется, остаток не растёт дважды.
+
+        Симулирует race condition: оба запроса «одновременно» видят
+        PENDING, но благодаря select_for_update() + повторной проверке
+        под блокировкой второй запрос получает 400 и НЕ возвращает
+        остаток повторно.
+        """
+        order = self._make_pending_order()
+        url = reverse('api-orders-detail', args=[order.id])
+
+        first = self.api.delete(url)
+        second = self.api.delete(url)
+
+        self.assertEqual(first.status_code, drf_status.HTTP_204_NO_CONTENT)
+        self.assertEqual(second.status_code, drf_status.HTTP_400_BAD_REQUEST)
+
+        self.product.refresh_from_db()
+        # Только +3, не +6
+        self.assertEqual(self.product.stock, 10)
+
+    def test_cancel_shipped_order_returns_400(self) -> None:
+        """SHIPPED: отмена отклоняется — товар уже у курьера."""
+        order = self._make_pending_order()
+        order.status = Order.Status.SHIPPED
+        order.save(update_fields=['status', 'updated_at'])
+        url = reverse('api-orders-detail', args=[order.id])
+
+        response = self.api.delete(url)
+
+        self.assertEqual(response.status_code, drf_status.HTTP_400_BAD_REQUEST)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 7)  # не изменился
+
+    def test_cancel_updates_updated_at(self) -> None:
+        """Отмена обновляет updated_at (иначе auto_now не срабатывает)."""
+        order = self._make_pending_order()
+        old_updated_at = order.updated_at
+        url = reverse('api-orders-detail', args=[order.id])
+
+        self.api.delete(url)
+
+        order.refresh_from_db()
+        self.assertGreater(order.updated_at, old_updated_at)
