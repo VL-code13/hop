@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import View
 
+from products.forms import AddToCartProductForm
 from products.models import Product
 
 from .cart import Cart
@@ -34,7 +35,12 @@ class CartDetailView(View):
 
 
 class CartAddView(View):
-    """Добавление товара в сессионную корзину с валидацией доступности."""
+    """Добавление товара в сессионную корзину с валидацией доступности.
+
+    Валидация количества выполняется через ``AddToCartProductForm`` —
+    это даёт нижнюю границу (>= 1) и верхнюю (<= stock) на уровне формы.
+    Дополнительная защита — в ``Cart.add()``.
+    """
 
     def post(self, request: HttpRequest, product_id: int, *args: Any, **kwargs: Any) -> HttpResponse:
         cart = Cart(request)
@@ -44,10 +50,16 @@ class CartAddView(View):
             messages.warning(request, f'Товар «{product.name}» временно отсутствует на складе.')
             return redirect('orders:cart_detail')
 
-        try:
-            quantity = int(request.POST.get('quantity', 1))
-        except (TypeError, ValueError):
-            quantity = 1
+        # Форма валидирует: quantity >= 1 и quantity <= product.stock.
+        # max_stock передаётся, чтобы верхняя граница была по остатку.
+        form = AddToCartProductForm(request.POST, max_stock=product.stock)
+        if not form.is_valid():
+            # Собираем понятное сообщение из ошибок формы
+            first_error = next(iter(form.errors.get('quantity', ['Некорректное количество.'])))
+            messages.error(request, f'Некорректное количество: {first_error}')
+            return redirect('orders:cart_detail')
+
+        quantity: int = form.cleaned_data['quantity']
 
         # Вызываем метод add сервиса Cart, проверяющий лимиты склада
         if cart.add(product=product, quantity=quantity, override_quantity=False):
@@ -61,20 +73,33 @@ class CartAddView(View):
 
 
 class CartUpdateView(View):
-    """Перезапись количества товара в корзине."""
+    """Перезапись количества товара в корзине.
+
+    Валидация — через ``AddToCartProductForm``. Если пользователь вводит
+    отрицательное или нулевое значение, форма отклоняет ввод, товар
+    остаётся с прежним количеством. Для удаления есть отдельный
+    ``CartRemoveView``.
+    """
 
     def post(self, request: HttpRequest, product_id: int, *args: Any, **kwargs: Any) -> HttpResponse:
         cart = Cart(request)
         product = get_object_or_404(Product, id=product_id, is_active=True)
 
-        try:
-            quantity = int(request.POST.get('quantity', 1))
-        except (TypeError, ValueError):
-            messages.error(request, 'Некорректное количество.')
+        form = AddToCartProductForm(request.POST, max_stock=product.stock)
+        if not form.is_valid():
+            first_error = next(iter(form.errors.get('quantity', ['Некорректное количество.'])))
+            messages.error(request, f'Некорректное количество: {first_error}')
             return redirect('orders:cart_detail')
 
+        quantity: int = form.cleaned_data['quantity']
+
         if not cart.add(product=product, quantity=quantity, override_quantity=True):
-            messages.error(request, f'Недостаточно товара на складе (доступно: {product.stock} шт.).')
+            messages.error(
+                request,
+                f'Недостаточно товара на складе (доступно: {product.stock} шт.).',
+            )
+        else:
+            messages.success(request, f'Количество товара «{product.name}» обновлено.')
         return redirect('orders:cart_detail')
 
 

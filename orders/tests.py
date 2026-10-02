@@ -63,6 +63,75 @@ class OrdersBusinessLogicTestCase(TestCase):
         # При превышении остатка корзина не пополняется
         self.assertEqual(cart.get(str(self.product.id), {}).get('quantity', 0), 0)
 
+    def test_cannot_add_negative_quantity(self) -> None:
+        """Отрицательное количество отклоняется.
+
+        Пользователь может отправить '-5' через curl или DevTools,
+        минуя UI (в шаблоне кнопка «−» скрыта при quantity <= 1).
+        Серверная защита — ``Cart.add()`` возвращает False на
+        quantity < 1, а ``AddToCartProductForm`` отклоняет ввод с
+        min_value=1 ещё до вызова сервиса.
+
+        Если бы этой защиты не было, получился бы «отрицательный
+        заказ»: ``price * (-5)`` уменьшает итоговую сумму.
+        """
+        response = self.client.post(
+            reverse('orders:cart_add', kwargs={'product_id': self.product.id}),
+            {'quantity': -5},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        cart = self.client.session.get('cart', {})
+        # Корзина не пополнилась — записи о товаре нет
+        self.assertEqual(cart.get(str(self.product.id), {}).get('quantity', 0), 0)
+
+    def test_cannot_add_zero_quantity(self) -> None:
+        """Нулевое количество отклоняется.
+
+        Ноль — некорректное количество для добавления. Отклоняем
+        так же, как и отрицательное. Для удаления позиции есть
+        отдельный endpoint ``cart_remove``.
+        """
+        response = self.client.post(
+            reverse('orders:cart_add', kwargs={'product_id': self.product.id}),
+            {'quantity': 0},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        cart = self.client.session.get('cart', {})
+        self.assertEqual(cart.get(str(self.product.id), {}).get('quantity', 0), 0)
+
+    def test_cart_update_rejects_negative_quantity(self) -> None:
+        """Обновление корзины отрицательным количеством не меняет состояние.
+
+        Сценарий:
+            1. Добавляем 2 шт. — корзина содержит 2.
+            2. Пытаемся обновить на -5.
+            3. Ожидаем: корзина всё ещё содержит 2 (отрицательное
+               отклонено формой и Cart.add()).
+
+        Проверяет, что отрицательное значение не удаляет товар и не
+        обнуляет корзину. Удаление — только через ``cart_remove``.
+        """
+        # 1. Добавляем 2 шт.
+        self.client.post(
+            reverse('orders:cart_add', kwargs={'product_id': self.product.id}),
+            {'quantity': 2},
+        )
+        cart = self.client.session['cart']
+        self.assertEqual(cart[str(self.product.id)]['quantity'], 2)
+
+        # 2. Пытаемся обновить на -5
+        response = self.client.post(
+            reverse('orders:cart_update', kwargs={'product_id': self.product.id}),
+            {'quantity': -5},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        # 3. Количество осталось прежним
+        cart_after = self.client.session['cart']
+        self.assertEqual(cart_after[str(self.product.id)]['quantity'], 2)
+
     def test_checkout_creates_order_and_deducts_stock(self) -> None:
         """
         Успешное оформление заказа:
