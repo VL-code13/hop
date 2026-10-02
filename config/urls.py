@@ -1,6 +1,5 @@
 """
 Главная конфигурация маршрутов URL проекта Hop & Barley.
-
 Реализует требования разделов:
 - 3.1, 3.2 («Веб-каталог и детальная карточка товара»)
 - 3.3, 3.4 («Корзина, чекаут и оформление заказа»)
@@ -28,12 +27,12 @@ from rest_framework_simplejwt.views import (
 )
 
 from config.admin import HopBarleyAdminSite
-from config.graphql.context import HopBarleyGraphQLView  # ← изменён импорт
+from config.graphql.context import HopBarleyGraphQLView
 from config.graphql.schema import schema
 from orders.api_views_orders import CartAPIView, OrderViewSet
 from products.api_views_products import ProductViewSet
 from reviews.api_views_reviews import ProductReviewsAPIView
-from users.views import RegisterView
+from users.api_views_users import UserRegistrationAPIView
 
 # Кастомная панель администратора с аналитикой (раздел 3.6 ТЗ)
 custom_admin_site = HopBarleyAdminSite(name='custom_admin')
@@ -63,7 +62,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/cart/', CartAPIView.as_view(), name='api-cart'),
     path('api/products/<int:product_id>/reviews/', ProductReviewsAPIView.as_view(), name='api-product-reviews'),
-    path('api/users/register/', RegisterView.as_view(), name='api-user-register'),
+    path('api/users/register/', UserRegistrationAPIView.as_view(), name='api-user-register'),
     path('api/users/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     # =========================================================================
@@ -75,10 +74,6 @@ urlpatterns = [
     # =========================================================================
     # 9. GraphQL — единый эндпоинт (раздел 3.9 ТЗ, бонус)
     # =========================================================================
-    # csrf_exempt: GraphQL-клиенты передают JWT в заголовке Authorization,
-    #   а не в форме — CSRF-токен для них не нужен и только мешает.
-    # context задаётся через HopBarleyGraphQLView.get_context() —
-    #   параметр context_getter в Django-интеграции Strawberry не поддерживается.
     path(
         'graphql/',
         csrf_exempt(HopBarleyGraphQLView.as_view(schema=schema)),

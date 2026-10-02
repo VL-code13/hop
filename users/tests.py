@@ -18,7 +18,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 
 from orders.models import Order
 from users.models import Profile
@@ -289,3 +289,76 @@ class TestFormatPhone:
         """Если уже отформатировано, функция не должна ломаться (pass-through)."""
         # +7 (999) 111-22-33 → не матчит ^\+7\d{10}$, возвращается как есть
         assert format_phone('+7 (999) 111-22-33') == '+7 (999) 111-22-33'
+
+
+# ──────────────────────── REST API: регистрация ────────────────────────
+class UserRegistrationAPITests(APITestCase):
+    """Тесты REST-регистрации через /api/users/register/ (раздел 3.7 ТЗ)."""
+
+    def setUp(self) -> None:
+        self.url = reverse('api-user-register')
+        self.valid_payload = {
+            'email': 'newbrewer@hopbarley.ru',
+            'password1': 'StrongBeerPass2026!',
+            'password2': 'StrongBeerPass2026!',
+        }
+
+    def test_register_success_returns_201_and_tokens(self) -> None:
+        """Успешная регистрация возвращает 201, данные пользователя и JWT-токены."""
+        response = self.client.post(self.url, self.valid_payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('user', response.data)
+        self.assertIn('tokens', response.data)
+        self.assertIn('access', response.data['tokens'])
+        self.assertIn('refresh', response.data['tokens'])
+        self.assertEqual(response.data['user']['email'], 'newbrewer@hopbarley.ru')
+        self.assertTrue(User.objects.filter(email='newbrewer@hopbarley.ru').exists())
+
+    def test_register_creates_profile_automatically(self) -> None:
+        """При регистрации через API профиль создаётся сигналом."""
+        self.client.post(self.url, self.valid_payload, format='json')
+        user = User.objects.get(email='newbrewer@hopbarley.ru')
+
+        self.assertTrue(hasattr(user, 'profile'))
+        self.assertIsInstance(user.profile, Profile)
+
+    def test_register_password_mismatch_returns_400(self) -> None:
+        """Несовпадение паролей возвращает 400 с ошибкой на password2."""
+        payload = {**self.valid_payload, 'password2': 'DifferentPass123!'}
+        response = self.client.post(self.url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password2', response.data)
+
+    def test_register_weak_password_returns_400(self) -> None:
+        """Слабый пароль («123») отклоняется AUTH_PASSWORD_VALIDATORS."""
+        payload = {
+            'email': 'weakpass@hopbarley.ru',
+            'password1': '123',
+            'password2': '123',
+        }
+        response = self.client.post(self.url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password1', response.data)
+
+    def test_register_duplicate_email_returns_400(self) -> None:
+        """Повторная регистрация на существующий email возвращает 400."""
+        User.objects.create_user(
+            username='existing',
+            email='newbrewer@hopbarley.ru',
+            password='ExistingPass123!',
+        )
+        response = self.client.post(self.url, self.valid_payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+
+    def test_register_does_not_store_raw_password(self) -> None:
+        """Пароль сохраняется в хешированном виде, не в открытом."""
+        self.client.post(self.url, self.valid_payload, format='json')
+        user = User.objects.get(email='newbrewer@hopbarley.ru')
+
+        self.assertNotEqual(user.password, 'StrongBeerPass2026!')
+        self.assertTrue(user.check_password('StrongBeerPass2026!'))
